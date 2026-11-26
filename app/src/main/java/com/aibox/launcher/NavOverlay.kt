@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -37,7 +38,10 @@ class NavOverlay(private val svc: AccessibilityService) {
         w, hgt, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, flags, PixelFormat.TRANSLUCENT
     )
 
-    fun start() { refresh() }
+    fun start() {
+        activeOverlay = this
+        refresh()
+    }
     fun touchDown() {}
     fun touchUp() {}
 
@@ -52,6 +56,7 @@ class NavOverlay(private val svc: AccessibilityService) {
 
     fun stop() {
         removeBarNow()
+        if (activeOverlay === this) activeOverlay = null
     }
 
     /** 建立並固定顯示於螢幕最底部、左右滿版無圓角的導覽列 */
@@ -138,7 +143,52 @@ class NavOverlay(private val svc: AccessibilityService) {
         private const val BTN_VPAD_U = 1.8f
         private const val BAR_H_U = ICON_U + 2 * BTN_VPAD_U
 
-        /** 導覽列固定顯示時佔用的底部高度(px) */
+        @Volatile
+        private var activeOverlay: NavOverlay? = null
+
+        /** 導覽列視窗實際高度(px) */
+        fun barHeightPx(c: Context): Int = (Ui.unit(c) * BAR_H_U).toInt()
+
+        /** 導覽列固定顯示時佔用的底部高度(px，含呼吸間距) */
         fun reservePx(c: Context): Int = (Ui.unit(c) * (BAR_H_U + 1.5f)).toInt()
+
+        private fun fullScreenHeightPx(c: Context): Int {
+            val wm = c.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                wm.maximumWindowMetrics.bounds.height()
+            } else {
+                val d = android.util.DisplayMetrics()
+                @Suppress("DEPRECATION")
+                wm.defaultDisplay.getRealMetrics(d)
+                d.heightPixels
+            }
+        }
+
+        /**
+         * 取得虛擬導覽列頂緣在實體螢幕上的 Y 座標(px)。
+         * 分割視窗底部必須小於此值，避免下方 App（例如 Spotify 底部播放列/分頁）被導覽列遮住無法點擊。
+         */
+        fun occupiedTopY(c: Context, screenHeight: Int): Int {
+            val active = NavState.visible || (Store.navBarOn(c) && NavService.inst != null)
+            if (!active) return screenHeight
+            val view = activeOverlay?.bar
+            if (view != null && view.isAttachedToWindow && view.height > 0) {
+                try {
+                    val loc = IntArray(2)
+                    view.getLocationOnScreen(loc)
+                    if (loc[1] in 1 until screenHeight) {
+                        return loc[1]
+                    }
+                } catch (_: Throwable) {}
+            }
+            return (screenHeight - reservePx(c)).coerceAtLeast(0)
+        }
+
+        /** 計算某個視窗底邊 (screen Y) 與虛擬導覽列的重疊高度(px) */
+        fun overlapWithWindowBottomPx(c: Context, winBottomOnScreen: Int): Int {
+            val screenH = fullScreenHeightPx(c)
+            val navTop = occupiedTopY(c, screenH)
+            return (winBottomOnScreen - navTop).coerceAtLeast(0)
+        }
     }
 }

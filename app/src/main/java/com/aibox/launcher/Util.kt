@@ -198,7 +198,67 @@ object Split {
         c.packageManager.hasSystemFeature("android.software.freeform_window_management") ||
             try { Settings.Global.getString(c.contentResolver, "enable_freeform_support") == "1" } catch (_: Exception) { false }
 
-    /** 兩個 App（或 3D 電動車模型 + App）各佔一半:直式螢幕 = 上下,橫式螢幕 = 左右 */
+    private fun sysDimenPx(c: Context, name: String): Int {
+        val id = c.resources.getIdentifier(name, "dimen", "android")
+        return if (id > 0) c.resources.getDimensionPixelSize(id) else 0
+    }
+
+    /** 計算扣除系統狀態列、系統導覽列與 AIBOX 虛擬導覽列後的安全可用區域 */
+    private fun safeUsableRect(c: Context): Rect {
+        val wm = c.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        val density = c.resources.displayMetrics.density
+        val navGap = (4f * density).toInt().coerceAtLeast(2)
+
+        val fullLeft: Int
+        val fullTop: Int
+        val fullRight: Int
+        val fullBottom: Int
+        val sysLeft: Int
+        val sysTop: Int
+        val sysRight: Int
+        val sysBottom: Int
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val metrics = wm.maximumWindowMetrics
+            val bounds = metrics.bounds
+            fullLeft = bounds.left
+            fullTop = bounds.top
+            fullRight = bounds.right
+            fullBottom = bounds.bottom
+            val insets = metrics.windowInsets.getInsetsIgnoringVisibility(
+                android.view.WindowInsets.Type.systemBars() or
+                    android.view.WindowInsets.Type.displayCutout()
+            )
+            sysLeft = insets.left
+            sysTop = insets.top
+            sysRight = insets.right
+            sysBottom = insets.bottom
+        } else {
+            val d = DisplayMetrics()
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.getRealMetrics(d)
+            fullLeft = 0
+            fullTop = 0
+            fullRight = d.widthPixels
+            fullBottom = d.heightPixels
+            sysLeft = 0
+            sysTop = sysDimenPx(c, "status_bar_height")
+            sysRight = 0
+            sysBottom = sysDimenPx(c, "navigation_bar_height")
+        }
+
+        val safeLeft = fullLeft + sysLeft
+        val safeTop = fullTop + sysTop
+        val safeRight = fullRight - sysRight
+        val sysSafeBottom = fullBottom - sysBottom
+        val navTop = NavOverlay.occupiedTopY(c, fullBottom)
+        val navSafeBottom = if (navTop < fullBottom) navTop - navGap else fullBottom
+        val safeBottom = minOf(sysSafeBottom, navSafeBottom).coerceAtLeast(safeTop + 200)
+
+        return Rect(safeLeft, safeTop, safeRight.coerceAtLeast(safeLeft + 200), safeBottom)
+    }
+
+    /** 兩個 App（或 3D 電動車模型 + App）各佔安全可視區的一半:直式 = 上下,橫式 = 左右 */
     fun launch(ctx: Context, combo: Combo) {
         val c = ctx.applicationContext
         if (combo.top == Apps.CAR_3D_PKG) {
@@ -209,15 +269,25 @@ object Split {
         if (!freeformAvailable(c)) {
             Toast.makeText(c, "此系統尚未啟用自由視窗(開發人員選項),畫面可能不會分割", Toast.LENGTH_LONG).show()
         }
-        val d = DisplayMetrics()
-        @Suppress("DEPRECATION")
-        (c.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(d)
-        val w = d.widthPixels
-        val h = d.heightPixels
+
+        val safe = safeUsableRect(c)
+        val density = c.resources.displayMetrics.density
+        // 上下/左右視窗間保留些許間隙，避免後開啟視窗的標題列或邊框陰影吃掉上半部畫面底部資訊
+        val splitGap = (6f * density).toInt().coerceAtLeast(4)
+        val halfGap = splitGap / 2
+
         val first: Rect
         val second: Rect
-        if (h >= w) { first = Rect(0, 0, w, h / 2); second = Rect(0, h / 2, w, h) }
-        else { first = Rect(0, 0, w / 2, h); second = Rect(w / 2, 0, w, h) }
+        if (safe.height() >= safe.width()) {
+            val midY = safe.top + safe.height() / 2
+            first = Rect(safe.left, safe.top, safe.right, midY - halfGap)
+            second = Rect(safe.left, midY + halfGap, safe.right, safe.bottom)
+        } else {
+            val midX = safe.left + safe.width() / 2
+            first = Rect(safe.left, safe.top, midX - halfGap, safe.bottom)
+            second = Rect(midX + halfGap, safe.top, safe.right, safe.bottom)
+        }
+
         Apps.openBounds(c, combo.top, first)
         Handler(Looper.getMainLooper()).postDelayed({ Apps.openBounds(c, combo.bottom, second) }, 800)
     }

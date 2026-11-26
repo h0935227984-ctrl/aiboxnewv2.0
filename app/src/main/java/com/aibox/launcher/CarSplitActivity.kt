@@ -70,7 +70,15 @@ class CarSplitActivity : BaseActivity() {
         )
 
         setContentView(root)
-        reserveBottom(root)
+        root.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            val loc = IntArray(2)
+            v.getLocationOnScreen(loc)
+            val winBottom = loc[1] + v.height
+            val overlap = NavOverlay.overlapWithWindowBottomPx(this, winBottom)
+            if (v.paddingBottom != overlap) {
+                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, overlap)
+            }
+        }
     }
 
     override fun onResume() {
