@@ -290,9 +290,10 @@
         let currentRoadLabel = MapLogic ? MapLogic.DEMO_ROUTE[0].name : '信義區實景道路';
         let hasLiveGpsFix = false;
 
-        let preferredMapZoom = 18.8;
+        let preferredMapZoom = 20.3;
         let followCarCentered = true;
         let pendingCameraPreset = false;
+        let pendingPresetZoom = false;
         let isApplyingProgrammaticCam = false;
         let radarZoomFactor = 1.0;
         let lastZoomChangedMs = 0;
@@ -815,11 +816,16 @@
                 const { Map, WebGLOverlayView, RenderingType } = await google.maps.importLibrary('maps');
 
                 const initScheme = getTargetMapColorScheme();
+                const initTilt = cameraMode === 1 ? 0 : (cameraMode === 2 ? 60 : 67.5);
+                const initZoom = cameraMode === 1 ? Math.min(preferredMapZoom, 18.8) : preferredMapZoom;
+                const initCenter = (cameraMode === 0 && MapLogic)
+                    ? MapLogic.computeLookAheadCenter(vehicleLat, vehicleLng, vehicleHeadingDeg, initZoom)
+                    : { lat: vehicleLat, lng: vehicleLng };
                 gMap = new Map(mapEl, {
-                    center: { lat: vehicleLat, lng: vehicleLng },
-                    zoom: preferredMapZoom,
-                    tilt: cameraMode === 1 ? 0 : 62,
-                    heading: vehicleHeadingDeg,
+                    center: initCenter,
+                    zoom: initZoom,
+                    tilt: initTilt,
+                    heading: cameraMode === 1 ? 0 : vehicleHeadingDeg,
                     mapId: 'DEMO_MAP_ID',
                     renderingType: RenderingType ? RenderingType.VECTOR : 'VECTOR',
                     colorScheme: initScheme,
@@ -828,6 +834,16 @@
                     minZoom: 12,
                     maxZoom: 21.5,
                     internalUsageAttributionIds: ['gmp_mcp_codeassist_v1_aistudio'],
+                });
+
+                let initialTilesSynced = false;
+                gMap.addListener('tilesloaded', function () {
+                    if (!initialTilesSynced) {
+                        initialTilesSynced = true;
+                        if (followCarCentered) {
+                            syncMapCameraNow(true);
+                        }
+                    }
                 });
 
                 gMap.addListener('zoom_changed', function () {
@@ -994,19 +1010,38 @@
             updateBanner();
         };
 
+        function getTargetTiltForMode(mode) {
+            if (mode === 1) return 0;
+            if (mode === 2) return 60;
+            return 67.5;
+        }
+
         function syncMapCameraNow(includePreset) {
             if (!gMap || !mapViewEnabled) return;
             const now = performance.now();
             lastCamUpdateMs = now;
             isApplyingProgrammaticCam = true;
             try {
+                const headingVal = cameraMode === 2
+                    ? ((now * 0.018) % 360)
+                    : (cameraMode === 1 ? 0 : vehicleHeadingDeg);
+                const z = gMap.getZoom() || preferredMapZoom;
+                const centerPos = (cameraMode === 0 && MapLogic)
+                    ? MapLogic.computeLookAheadCenter(vehicleLat, vehicleLng, vehicleHeadingDeg, z)
+                    : { lat: vehicleLat, lng: vehicleLng };
                 const camUpdate = {
-                    center: { lat: vehicleLat, lng: vehicleLng },
-                    heading: cameraMode === 2 ? ((now * 0.018) % 360) : vehicleHeadingDeg,
+                    center: centerPos,
+                    heading: headingVal,
                 };
-                if (includePreset || pendingCameraPreset) {
-                    camUpdate.tilt = cameraMode === 1 ? 0 : (cameraMode === 2 ? 64 : 62);
+                const targetTilt = getTargetTiltForMode(cameraMode);
+                const currentTilt = gMap.getTilt();
+                if (includePreset || pendingCameraPreset || (followCarCentered && Math.abs((Number(currentTilt) || 0) - targetTilt) > 1.5)) {
+                    camUpdate.tilt = targetTilt;
                     pendingCameraPreset = false;
+                }
+                if (pendingPresetZoom) {
+                    camUpdate.zoom = preferredMapZoom;
+                    pendingPresetZoom = false;
                 }
                 gMap.moveCamera(camUpdate);
             } finally {
@@ -1058,7 +1093,15 @@
             isUserInteracting = false;
             followCarCentered = true;
             pendingCameraPreset = true;
+            if (cameraMode === 0 && preferredMapZoom < 19.6) {
+                preferredMapZoom = 20.3;
+                pendingPresetZoom = true;
+            } else if (cameraMode === 1 && preferredMapZoom > 19.5) {
+                preferredMapZoom = 18.6;
+                pendingPresetZoom = true;
+            }
             syncHudButtons();
+            syncMapCameraNow(true);
             if (window.AndroidBridge && typeof window.AndroidBridge.setCameraMode === 'function') {
                 try { window.AndroidBridge.setCameraMode(cameraMode); } catch (_) {}
             }
@@ -1270,14 +1313,17 @@
                     }
                     if (cameraMode === 1) {
                         desiredCamPos.set(0, (26.0 + speedNorm * 6.0) * fallbackScale, 9.5 * fallbackScale);
+                        controls.target.lerp(fsdLookAtBase, Math.min(1.0, dt * 5.0));
                     } else if (cameraMode === 2) {
                         const angle = now * 0.00028;
-                        desiredCamPos.set(Math.sin(angle) * 4.8 * fallbackScale, 2.1 * fallbackScale, Math.cos(angle) * 4.8 * fallbackScale);
+                        desiredCamPos.set(Math.sin(angle) * 4.8 * fallbackScale, 2.0 * fallbackScale, Math.cos(angle) * 4.8 * fallbackScale);
+                        controls.target.lerp(fsdLookAtBase, Math.min(1.0, dt * 5.0));
                     } else {
-                        desiredCamPos.set(0, (2.25 + speedNorm * 0.35) * fallbackScale, (4.35 + speedNorm * 1.15) * fallbackScale);
+                        desiredCamPos.set(0, (1.65 + speedNorm * 0.25) * fallbackScale, (4.55 + speedNorm * 1.05) * fallbackScale);
+                        const chaseTarget = new THREE.Vector3(fsdLookAtBase.x, fsdLookAtBase.y + 0.35, fsdLookAtBase.z - 2.2);
+                        controls.target.lerp(chaseTarget, Math.min(1.0, dt * 5.0));
                     }
                     camera.position.lerp(desiredCamPos, Math.min(1.0, dt * 3.2));
-                    controls.target.lerp(fsdLookAtBase, Math.min(1.0, dt * 5.0));
                 }
                 controls.update();
                 if (camera.position.y < 0.35) camera.position.y = 0.35;

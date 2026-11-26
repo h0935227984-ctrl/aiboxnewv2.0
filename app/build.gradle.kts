@@ -8,12 +8,24 @@ val localProps = Properties().apply {
   val f = rootProject.file("local.properties")
   if (f.exists()) f.inputStream().use { load(it) }
 }
-val mapsApiKey: String = (
-  localProps.getProperty("MAPS_API_KEY")
-    ?: System.getenv("MAPS_API_KEY")
-    ?: System.getenv("GOOGLE_MAPS_API_KEY")
-    ?: ""
-).replace("\\", "\\\\").replace("\"", "\\\"")
+val dotEnvProps = Properties().apply {
+  val f = rootProject.file(".env")
+  if (f.exists()) f.inputStream().use { load(it) }
+}
+fun cleanProp(raw: String?): String =
+  raw?.trim()?.removeSurrounding("\"")?.removeSurrounding("'") ?: ""
+
+val mapsApiKey: String = listOf(
+  localProps.getProperty("MAPS_API_KEY"),
+  localProps.getProperty("GOOGLE_MAPS_API_KEY"),
+  dotEnvProps.getProperty("MAPS_API_KEY"),
+  dotEnvProps.getProperty("GOOGLE_MAPS_API_KEY"),
+  providers.gradleProperty("MAPS_API_KEY").orNull,
+  providers.gradleProperty("GOOGLE_MAPS_API_KEY").orNull,
+  System.getenv("MAPS_API_KEY"),
+  System.getenv("GOOGLE_MAPS_API_KEY")
+).map(::cleanProp).firstOrNull { it.isNotEmpty() }.orEmpty()
+  .replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
   namespace = "com.aibox.launcher"

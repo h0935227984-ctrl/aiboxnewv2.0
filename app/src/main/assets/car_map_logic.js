@@ -140,6 +140,31 @@
     return false;
   }
 
+  /**
+   * 3D 跟隨視角前瞻偏移：將地圖中心沿車頭方向往前推進，讓車身位於畫面中下方，展現立體 3D 前方路景
+   */
+  function computeLookAheadCenter(lat, lng, headingDeg, zoomLevel) {
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) {
+      return { lat: 25.033080, lng: 121.563680 };
+    }
+    const z = Number.isFinite(Number(zoomLevel)) ? Number(zoomLevel) : 20.3;
+    const latRad = latNum * DEG_TO_RAD;
+    const metersPerPx = (156543.03392 * Math.cos(latRad)) / Math.pow(2, z);
+    const aheadMeters = Math.max(10, Math.min(220, (68 * metersPerPx) / 0.42));
+    const rad = (Number(headingDeg) || 0) * DEG_TO_RAD;
+    const dNorth = aheadMeters * Math.cos(rad);
+    const dEast = aheadMeters * Math.sin(rad);
+    const dLat = (dNorth / EARTH_RADIUS_M) * RAD_TO_DEG;
+    const cosLat = Math.max(0.15, Math.cos(latRad));
+    const dLng = (dEast / (EARTH_RADIUS_M * cosLat)) * RAD_TO_DEG;
+    return {
+      lat: latNum + dLat,
+      lng: lngNum + dLng,
+    };
+  }
+
   return {
     DEMO_ROUTE,
     totalLoopMeters,
@@ -150,5 +175,6 @@
     stepDemoRoute,
     computeLaneMatchedCarScale,
     shouldKeepFollowingOnDrag,
+    computeLookAheadCenter,
   };
 });
