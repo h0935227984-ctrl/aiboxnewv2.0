@@ -109,6 +109,22 @@
         android:layout_height="wrap_content"
         android:text="開機背景續播 Spotify／音樂"
         android:textSize="16sp"
+        android:paddingBottom="12dp"/>
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swAutoUsbReconnect"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="開機有線 USB 自動重連 (每 3 秒嘗試，連上關閉)"
+        android:textSize="16sp"
+        android:paddingBottom="4dp"/>
+
+    <TextView
+        android:id="@+id/tvUsbStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="目前狀態：待命中"
+        android:textSize="12sp"
         android:paddingBottom="16dp"/>
 
     <Button

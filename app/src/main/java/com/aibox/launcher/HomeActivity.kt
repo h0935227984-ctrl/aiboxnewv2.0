@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
@@ -131,6 +132,14 @@ class HomeActivity : BaseActivity() {
         applyCar3DPosition()
         updateCar3DView()
         MediaResumeHelper.resumeOnBootIfNeeded(this)
+        UsbAutoConnectHelper.startOnBootIfNeeded(this)
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
+        if (ev?.actionMasked == MotionEvent.ACTION_DOWN && hasWindowFocus()) {
+            UsbAutoConnectHelper.markConnectedAndStop(this, "偵測到車機螢幕觸控操作，嘗試連線功能已關閉")
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun applyCar3DPosition() {
@@ -355,6 +364,8 @@ class HomeActivity : BaseActivity() {
         val rgCameraMode = v.findViewById<android.widget.RadioGroup>(R.id.rgCameraMode)
         val swNavBar = v.findViewById<SwitchCompat>(R.id.swNavBar)
         val swAutoResumeSpotify = v.findViewById<SwitchCompat>(R.id.swAutoResumeSpotify)
+        val swAutoUsbReconnect = v.findViewById<SwitchCompat>(R.id.swAutoUsbReconnect)
+        val tvUsbStatus = v.findViewById<TextView>(R.id.tvUsbStatus)
         val btnSplitManager = v.findViewById<View>(R.id.btnSplitManager)
 
         swCar3D.isChecked = Store.car3DOn(this)
@@ -441,6 +452,14 @@ class HomeActivity : BaseActivity() {
         swAutoResumeSpotify?.setOnCheckedChangeListener { _, on ->
             Store.setAutoResumeSpotifyOn(this, on)
             Toast.makeText(this, if (on) "已開啟開機背景續播 Spotify／音樂" else "已關閉開機背景續播", Toast.LENGTH_SHORT).show()
+        }
+
+        swAutoUsbReconnect?.isChecked = Store.autoUsbReconnectOn(this)
+        tvUsbStatus?.text = "目前狀態：${UsbAutoConnectHelper.statusText()}"
+        swAutoUsbReconnect?.setOnCheckedChangeListener { _, on ->
+            UsbAutoConnectHelper.setAutoReconnectEnabled(this, on)
+            tvUsbStatus?.text = "目前狀態：${UsbAutoConnectHelper.statusText()}"
+            Toast.makeText(this, if (on) "已開啟開機每 3 秒有線 USB 自動重連" else "已關閉開機有線 USB 自動重連", Toast.LENGTH_SHORT).show()
         }
 
         btnSplitManager.setOnClickListener {

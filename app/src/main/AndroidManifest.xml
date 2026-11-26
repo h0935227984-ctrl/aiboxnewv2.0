@@ -21,6 +21,14 @@
             <action android:name="android.intent.action.MEDIA_BUTTON" />
         </intent>
         <package android:name="com.spotify.music" />
+        <package android:name="cn.manstep.phonemirrorBox" />
+        <package android:name="com.carlinkit.carlink" />
+        <package android:name="com.zjinnova.zlink" />
+        <package android:name="com.suding.speedplay" />
+        <package android:name="com.carletter.car" />
+        <package android:name="com.hz.carplay" />
+        <package android:name="com.tima.carnet" />
+        <package android:name="com.android.car.link" />
     </queries>
 
     <application

@@ -80,6 +80,12 @@ object Store {
     fun lastResumedBootCount(c: Context) = sp(c).getInt("lastBootCount", -1)
     fun setLastResumedBootCount(c: Context, v: Int) = sp(c).edit().putInt("lastBootCount", v).apply()
 
+    /** 開機每 3 秒嘗試有線 USB 連線，連上後自動停止 */
+    fun autoUsbReconnectOn(c: Context) = sp(c).getBoolean("autoUsbReconnect", true)
+    fun setAutoUsbReconnectOn(c: Context, v: Boolean) = sp(c).edit().putBoolean("autoUsbReconnect", v).apply()
+    fun lastUsbBootCount(c: Context) = sp(c).getInt("lastUsbBootCount", -1)
+    fun setLastUsbBootCount(c: Context, v: Int) = sp(c).edit().putInt("lastUsbBootCount", v).apply()
+
     fun wallpaperPaths(c: Context): MutableList<String> {
         val a = JSONArray(sp(c).getString("wp_paths", "[]"))
         return MutableList(a.length()) { i -> a.getString(i) }
