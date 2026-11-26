@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content" android:layout_height="wrap_content"
+    android:gravity="center_horizontal" android:orientation="vertical" android:padding="6dp">
+
+    <FrameLayout
+        android:layout_width="wrap_content" android:layout_height="wrap_content">
+        <LinearLayout
+            android:layout_width="92dp" android:layout_height="92dp"
+            android:background="@drawable/bg_glass" android:gravity="center"
+            android:orientation="vertical" android:padding="8dp">
+            <ImageView android:id="@+id/iconTop"
+                android:layout_width="34dp" android:layout_height="34dp"
+                tools:src="@drawable/ic_launcher" />
+            <Space
+                android:layout_width="1dp"
+                android:layout_height="8dp" />
+            <ImageView android:id="@+id/iconBottom"
+                android:layout_width="34dp" android:layout_height="34dp"
+                tools:src="@drawable/ic_launcher" />
+        </LinearLayout>
+        <TextView android:id="@+id/del" android:text="✕"
+            android:layout_width="26dp" android:layout_height="26dp"
+            android:layout_gravity="top|end" android:background="@drawable/bg_chip"
+            android:gravity="center" android:textColor="@color/text" android:textSize="12sp"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <TextView android:id="@+id/caption"
+        android:layout_width="104dp" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:ellipsize="end" android:gravity="center"
+        android:maxLines="2" android:textColor="@color/text" android:textSize="11sp"
+        tools:text="Google 地圖 + Spotify" />
+</LinearLayout>

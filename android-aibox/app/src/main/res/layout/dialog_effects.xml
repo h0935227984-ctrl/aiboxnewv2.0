@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical" android:padding="22dp">
+
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center_vertical" android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="虛化背景" android:textSize="16sp" />
+        <androidx.appcompat.widget.SwitchCompat android:id="@+id/swBlur"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    </LinearLayout>
+    <SeekBar android:id="@+id/sbBlur"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:max="100" />
+    <TextView android:id="@+id/note"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="此系統版本的影片桌布不支援虛化(需 Android 12 以上),圖片桌布不受影響。"
+        android:textSize="12sp" android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="16dp" android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="調暗背景" android:textSize="16sp" />
+        <androidx.appcompat.widget.SwitchCompat android:id="@+id/swDim"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    </LinearLayout>
+    <SeekBar android:id="@+id/sbDim"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:max="100" />
+
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="16dp" android:gravity="center_vertical"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="桌布隨機輪播" android:textSize="16sp" />
+        <androidx.appcompat.widget.SwitchCompat android:id="@+id/swRandom"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btnPickWallpaper"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="16dp" android:text="選擇多張照片 / 影片" />
+
+    <Button
+        android:id="@+id/btnResetWallpaper"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="8dp" android:text="還原預設桌布"
+        android:backgroundTint="#64748B" />
+
+</LinearLayout>

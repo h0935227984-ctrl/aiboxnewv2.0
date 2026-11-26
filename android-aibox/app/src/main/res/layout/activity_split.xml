@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/bg" android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="20dp">
+
+        <LinearLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:gravity="center_vertical" android:orientation="horizontal">
+            <TextView android:id="@+id/back" android:text="←"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:padding="10dp" android:textColor="@color/text" android:textSize="24sp" />
+            <TextView
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="螢幕分割 App 管理器" android:textColor="@color/text"
+                android:textSize="22sp" android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:background="@drawable/bg_card"
+            android:orientation="vertical" android:padding="18dp">
+            <TextView
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="建立新分割組合" android:textColor="@color/accent"
+                android:textSize="14sp" android:textStyle="bold" />
+            <TextView
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="上下選單皆可選擇「3D 電動車模型」或任意 App，自由決定模型在上方或下方"
+                android:textColor="@color/sub" android:textSize="12sp" />
+            <TextView
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="12dp" android:text="上半區 / 左側項目"
+                android:textColor="@color/sub" android:textSize="13sp" />
+            <Spinner android:id="@+id/spTop"
+                android:layout_width="match_parent" android:layout_height="wrap_content" />
+            <TextView
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:text="下半區 / 右側項目"
+                android:textColor="@color/sub" android:textSize="13sp" />
+            <Spinner android:id="@+id/spBottom"
+                android:layout_width="match_parent" android:layout_height="wrap_content" />
+            <TextView android:id="@+id/save" android:text="加入分割組合"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" android:background="@drawable/bg_accent"
+                android:gravity="center" android:padding="14dp"
+                android:textColor="#FFFFFF" android:textSize="16sp" android:textStyle="bold" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp" android:layout_marginBottom="6dp"
+            android:text="已儲存的組合(點一下啟動,✕ 刪除)" android:textColor="@color/sub" android:textSize="14sp" />
+
+        <GridLayout android:id="@+id/list"
+            android:layout_width="match_parent" android:layout_height="wrap_content" />
+
+    </LinearLayout>
+</ScrollView>

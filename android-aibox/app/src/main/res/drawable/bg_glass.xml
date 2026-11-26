@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 柔霧半透明毛玻璃水滴：無生硬外框線，柔和融合背景 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient android:angle="270"
+                android:endColor="@color/glass_bottom"
+                android:startColor="@color/glass_top" />
+            <corners android:radius="30dp" />
+        </shape>
+    </item>
+    <item android:height="40dp" android:gravity="top"
+        android:left="8dp" android:right="8dp" android:top="4dp">
+        <shape android:shape="rectangle">
+            <gradient android:angle="270"
+                android:endColor="#00FFFFFF"
+                android:startColor="@color/glass_highlight" />
+            <corners android:radius="26dp" />
+        </shape>
+    </item>
+</layer-list>

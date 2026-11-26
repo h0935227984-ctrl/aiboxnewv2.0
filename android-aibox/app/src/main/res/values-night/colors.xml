@@ -1,0 +1,15 @@
+<resources>
+    <color name="bg">#020617</color>
+    <color name="card">#EB0F172A</color>
+    <color name="text">#FFFFFF</color>
+    <color name="sub">#94A3B8</color>
+    <color name="accent">#10B981</color>
+    <color name="chip">#1E293B</color>
+    <color name="glass_top">#44FFFFFF</color>
+    <color name="glass_bottom">#14FFFFFF</color>
+    <color name="glass_stroke">#18FFFFFF</color>
+    <color name="glass_highlight">#33FFFFFF</color>
+    <color name="feather_edge">#D9020617</color>
+    <color name="feather_mid">#66020617</color>
+    <color name="feather_zero">#00020617</color>
+</resources>

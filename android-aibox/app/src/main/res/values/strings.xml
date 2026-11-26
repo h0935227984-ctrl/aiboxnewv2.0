@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">AIBOX 桌面</string>
+    <string name="a11y_desc">用於顯示虛擬導覽列(返回/首頁/最近工作)。不會讀取或記錄畫面內容。</string>
+</resources>

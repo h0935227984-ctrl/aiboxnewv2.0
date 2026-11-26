@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent" android:layout_height="match_parent">
+
+    <!-- 桌布:圖片 / 影片 / 變暗遮罩 -->
+    <ImageView android:id="@+id/bgImage"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:scaleType="centerCrop" />
+    <TextureView android:id="@+id/bgVideo"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:visibility="gone" />
+    <View android:id="@+id/scrim"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <!-- 頂部柔霧漸層過渡，讓時鐘與設定區無邊界融入桌面 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="150dp"
+        android:layout_gravity="top"
+        android:background="@drawable/bg_feather_top"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <ScrollView android:id="@+id/scroll"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:clipToPadding="false" android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/homeContentColumn"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="24dp">
+
+            <!-- 右上角齒輪設定按鈕（無分割管理按鈕） -->
+            <ImageView android:id="@+id/btnMore"
+                android:layout_width="48dp" android:layout_height="48dp"
+                android:layout_gravity="end"
+                android:layout_marginEnd="24dp"
+                android:contentDescription="設定" android:src="@drawable/ic_more" />
+
+            <!-- 3D 互動車輛展示區（上下緣加柔霧羽化遮罩，消除水平切割線） -->
+            <FrameLayout
+                android:id="@+id/carWrapper"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:minHeight="280dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="4dp">
+
+                <FrameLayout
+                    android:id="@+id/carContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_gravity="top"
+                    android:background="@drawable/bg_feather_top"
+                    android:clickable="false"
+                    android:focusable="false" />
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:layout_gravity="bottom"
+                    android:background="@drawable/bg_feather_bottom"
+                    android:clickable="false"
+                    android:focusable="false" />
+            </FrameLayout>
+
+            <!-- 底部捷徑 Dock（柔霧漸層背景無邊框，平滑融合於畫面下方） -->
+            <FrameLayout
+                android:id="@+id/combosSection"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_feather_dock"
+                android:paddingTop="14dp"
+                android:paddingBottom="18dp">
+
+                <GridLayout android:id="@+id/combos"
+                    android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginStart="24dp" android:layout_marginEnd="24dp" />
+            </FrameLayout>
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

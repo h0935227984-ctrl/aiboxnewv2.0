@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swCar3D"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="開啟 3D 車輛桌面展廳 (360° GLB)"
+        android:textSize="16sp"
+        android:paddingBottom="12dp"/>
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swDemoDrive"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="開啟模擬試駕預覽 (自動巡航)"
+        android:textSize="16sp"
+        android:paddingBottom="12dp"/>
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swRainbowRoad"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="啟用彩虹大道模式 (炫彩光帶)"
+        android:textSize="16sp"
+        android:paddingBottom="12dp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="實景光影主題模式"
+        android:textSize="14sp"
+        android:paddingBottom="4dp"/>
+
+    <RadioGroup
+        android:id="@+id/rgThemeMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="12dp">
+        <RadioButton
+            android:id="@+id/rbThemeAuto"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="自動"/>
+        <RadioButton
+            android:id="@+id/rbThemeDay"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="日間"/>
+        <RadioButton
+            android:id="@+id/rbThemeNight"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="夜間"/>
+    </RadioGroup>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="鏡頭視角模式"
+        android:textSize="14sp"
+        android:paddingBottom="4dp"/>
+
+    <RadioGroup
+        android:id="@+id/rgCameraMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="16dp">
+        <RadioButton
+            android:id="@+id/rbCamFollow"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="跟隨"/>
+        <RadioButton
+            android:id="@+id/rbCamTop"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="俯視"/>
+        <RadioButton
+            android:id="@+id/rbCamShowroom"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="展廳 360°"/>
+    </RadioGroup>
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swNavBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="開啟固定虛擬導覽列"
+        android:textSize="16sp"
+        android:paddingBottom="12dp"/>
+
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swAutoResumeSpotify"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="開機背景續播 Spotify／音樂"
+        android:textSize="16sp"
+        android:paddingBottom="16dp"/>
+
+    <Button
+        android:id="@+id/btnSplitManager"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="分割畫面管理"/>
+
+</LinearLayout>
