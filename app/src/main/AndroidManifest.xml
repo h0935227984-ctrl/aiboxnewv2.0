@@ -2,7 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- 宣告 GPS 定位權限:用於偵測車輛時速與轉彎角度 -->
+    <!-- 網路權限:用於載入 Google Maps 3D 圖資與即時路況 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 宣告 GPS 定位權限:用於偵測車輛時速、經緯度與轉彎角度 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- 開機自動背景續播音樂 -->

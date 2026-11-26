@@ -1,8 +1,11 @@
 package com.aibox.launcher
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.view.MotionEvent
+import android.webkit.GeolocationPermissions
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -14,19 +17,36 @@ import android.widget.FrameLayout
 import java.io.File
 
 /**
- * 載入 3D 車輛與動態物理畫面的互動檢視器 (WebView + Three.js / WebGL)
+ * 載入 3D 車輛與 Google Maps 3D 實景整合檢視器 (WebView + Three.js + Google Maps Vector/WebGL)
  */
 class GlbCarView(context: Context) : FrameLayout(context) {
     val webView = WebView(context)
     private var isPageLoaded = false
     private var latestSpeedKmh = 0f
     private var latestBearingDeg = -1f
+    private var latestLat = Double.NaN
+    private var latestLng = Double.NaN
     private var latestDemoDrive = Store.demoDriveOn(context)
     private var latestRainbow = Store.rainbowRoadOn(context)
     private var latestThemeMode = Store.themeMode(context)
     private var latestCameraMode = Store.fsdCameraMode(context)
 
     inner class AndroidBridge {
+
+        @JavascriptInterface
+        fun getMapsApiKey(): String = BuildConfig.MAPS_API_KEY
+
+        @JavascriptInterface
+        fun openExternalUrl(url: String?) {
+            if (url.isNullOrBlank()) return
+            if (!url.startsWith("https://") && !url.startsWith("http://") && !url.startsWith("geo:")) return
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {}
+        }
 
         @JavascriptInterface
         fun setDemoDrive(enabled: Boolean) {
@@ -62,10 +82,36 @@ class GlbCarView(context: Context) : FrameLayout(context) {
         setBackgroundColor(Color.TRANSPARENT)
         webView.setBackgroundColor(Color.TRANSPARENT)
         webView.setLayerType(LAYER_TYPE_HARDWARE, null)
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onGeolocationPermissionsShowPrompt(
+                origin: String,
+                callback: GeolocationPermissions.Callback
+            ) {
+                val hasFine = context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                val hasCoarse = context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                callback.invoke(origin, hasFine || hasCoarse, false)
+            }
+        }
         webView.addJavascriptInterface(AndroidBridge(), "AndroidBridge")
 
         webView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val uri = request?.url ?: return false
+                if (uri.host == "appassets.androidplatform.net") return false
+                val scheme = uri.scheme?.lowercase()
+                if (scheme == "https" || scheme == "http" || scheme == "geo") {
+                    try {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                        return true
+                    } catch (_: Exception) {}
+                }
+                return false
+            }
+
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
                 val uri = request.url
                 if (uri.host == "appassets.androidplatform.net") {
@@ -108,7 +154,7 @@ class GlbCarView(context: Context) : FrameLayout(context) {
                 setRainbowRoad(latestRainbow)
                 setThemeMode(latestThemeMode)
                 setCameraMode(latestCameraMode)
-                setGpsData(latestSpeedKmh, latestBearingDeg)
+                setGpsData(latestSpeedKmh, latestBearingDeg, latestLat, latestLng)
             }
         }
 
@@ -116,6 +162,10 @@ class GlbCarView(context: Context) : FrameLayout(context) {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
+            setGeolocationEnabled(true)
+            setSupportZoom(false)
+            builtInZoomControls = false
+            displayZoomControls = false
             allowFileAccess = true
             allowContentAccess = true
             useWideViewPort = false
@@ -142,12 +192,23 @@ class GlbCarView(context: Context) : FrameLayout(context) {
         }
     }
 
-    fun setGpsData(speedKmh: Float, bearingDeg: Float) {
+    fun setGpsData(
+        speedKmh: Float,
+        bearingDeg: Float,
+        lat: Double = Double.NaN,
+        lng: Double = Double.NaN
+    ) {
         latestSpeedKmh = speedKmh
         latestBearingDeg = bearingDeg
+        if (!lat.isNaN() && !lng.isNaN()) {
+            latestLat = lat
+            latestLng = lng
+        }
         if (!isPageLoaded) return
+        val latJs = if (!latestLat.isNaN()) latestLat.toString() else "null"
+        val lngJs = if (!latestLng.isNaN()) latestLng.toString() else "null"
         webView.post {
-            webView.evaluateJavascript("if(window.setGpsData)setGpsData($speedKmh, $bearingDeg)", null)
+            webView.evaluateJavascript("if(window.setGpsData)setGpsData($speedKmh, $bearingDeg, $latJs, $lngJs)", null)
         }
     }
 

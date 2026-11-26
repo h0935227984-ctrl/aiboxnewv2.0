@@ -212,7 +212,7 @@ class HomeActivity : BaseActivity() {
         lastGpsLocation = loc
 
         val glbView = findViewById<ViewGroup>(R.id.carContainer)?.getChildAt(0) as? GlbCarView
-        glbView?.setGpsData(kmh, bearing)
+        glbView?.setGpsData(kmh, bearing, loc.latitude, loc.longitude)
     }
 
     private fun startGpsSpeedMonitor() {

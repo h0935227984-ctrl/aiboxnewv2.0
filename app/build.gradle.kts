@@ -1,6 +1,19 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
 }
+
+val localProps = Properties().apply {
+  val f = rootProject.file("local.properties")
+  if (f.exists()) f.inputStream().use { load(it) }
+}
+val mapsApiKey: String = (
+  localProps.getProperty("MAPS_API_KEY")
+    ?: System.getenv("MAPS_API_KEY")
+    ?: System.getenv("GOOGLE_MAPS_API_KEY")
+    ?: ""
+).replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
   namespace = "com.aibox.launcher"
@@ -12,7 +25,7 @@ android {
     targetSdk = 36
     versionCode = 1
     versionName = "1.0"
-
+    buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,

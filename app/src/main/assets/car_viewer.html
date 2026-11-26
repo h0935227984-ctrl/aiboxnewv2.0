@@ -2,25 +2,45 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="utf-8">
-    <title>即時輔助駕駛立體實景檢視器</title>
+    <title>AIBOX 3D 車輛 × Google Maps 實景整合檢視器</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "Segoe UI", Roboto, sans-serif; user-select: none; -webkit-user-select: none; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Noto Sans TC", "Segoe UI", Roboto, sans-serif; -webkit-user-select: none; user-select: none; }
         html, body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
-        #container { width: 100%; height: 100%; display: block; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        #map {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            transition: opacity 0.25s ease;
+        }
+        #map.hidden { opacity: 0; pointer-events: none; }
+
+        #container {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            display: block;
+        }
+        #container.passthrough { pointer-events: none; }
+        #container.hidden { display: none; }
 
         .hud-layer {
             position: absolute;
             bottom: 8px;
             left: 0;
             width: 100%;
-            z-index: 10;
+            z-index: 12;
             pointer-events: none;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 5px;
-            padding: 0 6px;
+            gap: 6px;
+            padding: 0 8px;
         }
 
         .road-banner {
@@ -28,15 +48,17 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 3px 11px;
+            padding: 4px 12px;
             border-radius: 14px;
-            background: rgba(15, 23, 42, 0.82);
+            background: rgba(15, 23, 42, 0.84);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border: 1px solid rgba(148, 163, 184, 0.28);
             color: #f8fafc;
             font-size: 11px;
             font-weight: 600;
-            letter-spacing: 0.3px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            letter-spacing: 0.2px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
         }
 
         .status-dot {
@@ -50,29 +72,21 @@
         .status-dot.live { background: #10b981; box-shadow: 0 0 8px #10b981; }
         .status-dot.demo { background: #38bdf8; box-shadow: 0 0 8px #38bdf8; }
 
-        .limit-badge {
-            display: none;
-            align-items: center;
-            justify-content: center;
-            min-width: 22px;
-            height: 22px;
-            padding: 0 4px;
-            border-radius: 50%;
-            background: #ffffff;
-            color: #0f172a;
-            border: 2.5px solid #ef4444;
-            font-size: 10px;
-            font-weight: 800;
+        .speed-pill {
+            color: #38bdf8;
+            font-weight: 700;
             font-variant-numeric: tabular-nums;
         }
 
         .hud-bar {
             pointer-events: auto;
-            background: rgba(15, 23, 42, 0.84);
+            background: rgba(15, 23, 42, 0.86);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.18);
             border-radius: 18px;
-            padding: 4px 8px;
-            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            padding: 5px 8px;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.12);
             display: flex;
             align-items: center;
             gap: 5px;
@@ -83,36 +97,96 @@
         .hud-bar::-webkit-scrollbar { display: none; }
 
         .btn-chip {
+            appearance: none;
             background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.14);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             border-radius: 12px;
-            padding: 4px 9px;
-            font-size: 10.5px;
+            padding: 5px 10px;
+            font-size: 11px;
             font-weight: 600;
             color: #e2e8f0;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.18s ease;
             outline: none;
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            gap: 4px;
         }
-        .btn-chip:active, .btn-chip.active {
-            background: rgba(56, 189, 248, 0.34);
+        .btn-chip:hover {
+            background: rgba(255, 255, 255, 0.16);
+        }
+        .btn-chip.active {
+            background: rgba(56, 189, 248, 0.32);
             border-color: #38bdf8;
             color: #ffffff;
-            box-shadow: 0 0 10px rgba(56, 189, 248, 0.40);
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.36);
         }
         .btn-chip.rainbow.active {
             background: linear-gradient(90deg, rgba(239,68,68,0.48), rgba(234,179,8,0.48), rgba(34,197,94,0.48), rgba(56,189,248,0.48), rgba(168,85,247,0.48));
             border-color: rgba(255, 255, 255, 0.58);
             color: #ffffff;
-            box-shadow: 0 0 10px rgba(168, 85, 247, 0.48);
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.44);
+        }
+
+        .map-notice {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 15;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(251, 191, 36, 0.45);
+            color: #fef3c7;
+            font-size: 11px;
+            padding: 5px 12px;
+            border-radius: 12px;
+            display: none;
+        }
+
+        .map-zoom-controls {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 14;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            pointer-events: auto;
+        }
+        .zoom-btn {
+            appearance: none;
+            width: 34px;
+            height: 34px;
+            border-radius: 11px;
+            background: rgba(15, 23, 42, 0.84);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.20);
+            color: #f8fafc;
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.30);
+            transition: all 0.16s ease;
+        }
+        .zoom-btn:hover { background: rgba(30, 41, 59, 0.94); border-color: rgba(56, 189, 248, 0.6); }
+        .zoom-btn:active { transform: scale(0.94); }
+        .zoom-btn.recenter-needed {
+            border-color: #38bdf8;
+            color: #38bdf8;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.45);
         }
 
         #loading {
             position: absolute;
-            top: 46%; left: 50%;
+            top: 46%;
+            left: 50%;
             transform: translate(-50%, -50%);
             z-index: 20;
             color: #ffffff;
@@ -127,7 +201,8 @@
             gap: 7px;
         }
         .spinner {
-            width: 12px; height: 12px;
+            width: 12px;
+            height: 12px;
             border: 2px solid rgba(255,255,255,0.3);
             border-top-color: #38bdf8;
             border-radius: 50%;
@@ -138,26 +213,67 @@
     <script src="three.min.js"></script>
     <script src="GLTFLoader.js"></script>
     <script src="OrbitControls.js"></script>
-<script src="/_aistudio-iframe.js?v=29045eb3"></script></head>
-<body>
+    <script src="car_map_logic.js"></script>
+</head>
+<body data-map-mode="maps" data-demo-drive="false" data-car-source="loading" data-webgl-overlay="pending">
     <div id="loading">
         <div class="spinner"></div>
-        <span id="loadText">啟動立體實景引擎中...</span>
+        <span id="loadText">啟動 3D 車輛與 Google Maps 引擎中...</span>
     </div>
 
-    <div id="container"></div>
+    <div id="mapNotice" class="map-notice" role="status"></div>
+    <div id="map" aria-label="Google Maps 3D 實景地圖"></div>
+    <div id="container" class="passthrough" data-testid="car-three-canvas"></div>
+
+    <div class="map-zoom-controls" aria-label="地圖與視角縮放控制">
+        <button type="button" id="btnZoomIn" class="zoom-btn" aria-label="放大地圖與車輛視角">+</button>
+        <button type="button" id="btnZoomOut" class="zoom-btn" aria-label="縮小地圖與車輛視角">−</button>
+        <button type="button" id="btnRecenter" class="zoom-btn" aria-label="置中跟隨車輛">⌖</button>
+    </div>
+
+    <div class="hud-layer">
+        <div class="road-banner">
+            <span id="statusDot" class="status-dot"></span>
+            <span id="roadTitle">Google Maps 3D 實景待命</span>
+            <span id="speedReadout" class="speed-pill">0 km/h</span>
+        </div>
+
+        <nav class="hud-bar" aria-label="3D 地圖與駕駛控制列">
+            <button type="button" id="btnMapToggle" class="btn-chip active" aria-label="切換實景地圖或純車道雷達">實景地圖</button>
+            <button type="button" id="btnDemoDrive" class="btn-chip" aria-label="切換模擬試駕">模擬試駕</button>
+            <button type="button" id="btnRainbow" class="btn-chip active rainbow" aria-label="切換彩虹車道">彩虹車道</button>
+            <button type="button" id="btnCamera" class="btn-chip" aria-label="切換鏡頭視角">視角: 跟隨</button>
+            <button type="button" id="btnTheme" class="btn-chip" aria-label="切換日夜主題">主題: 自動</button>
+        </nav>
+    </div>
 
     <script>
+        const mapEl = document.getElementById('map');
         const container = document.getElementById('container');
         const loading = document.getElementById('loading');
         const loadTextEl = document.getElementById('loadText');
+        const mapNoticeEl = document.getElementById('mapNotice');
+        const statusDotEl = document.getElementById('statusDot');
+        const roadTitleEl = document.getElementById('roadTitle');
+        const speedReadoutEl = document.getElementById('speedReadout');
 
+        const btnMapToggle = document.getElementById('btnMapToggle');
+        const btnDemoDrive = document.getElementById('btnDemoDrive');
+        const btnRainbow = document.getElementById('btnRainbow');
+        const btnCamera = document.getElementById('btnCamera');
+        const btnTheme = document.getElementById('btnTheme');
+        const btnZoomIn = document.getElementById('btnZoomIn');
+        const btnZoomOut = document.getElementById('btnZoomOut');
+        const btnRecenter = document.getElementById('btnRecenter');
+
+        const MapLogic = window.AiboxMapLogic;
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model') || 'carnew.glb';
         let rainbowEnabled = urlParams.get('rainbow') !== 'false';
         let themeMode = parseInt(urlParams.get('theme') || '0', 10) || 0; // 0=自動, 1=日間, 2=夜間
-        let cameraMode = parseInt(urlParams.get('cam') || '0', 10) || 0;  // 0=跟隨, 1=俯視, 2=展廳
+        let cameraMode = parseInt(urlParams.get('cam') || '0', 10) || 0;  // 0=跟隨, 1=俯視, 2=展廳360
         let demoDrive = urlParams.get('demo') === 'true';
+        let mapViewEnabled = urlParams.get('map') !== 'false';
 
         let targetSpeedKmh = 0.0;
         let currentSpeedKmh = 0.0;
@@ -165,29 +281,126 @@
         let currentCurvature = 0.0;
         let prevBearingDeg = -1;
         let lastBearingTimeMs = 0;
-        let demoZ = 0;
-        let brakeIntensity = 0;
+
+        let vehicleLat = MapLogic ? MapLogic.DEMO_ROUTE[0].lat : 25.033080;
+        let vehicleLng = MapLogic ? MapLogic.DEMO_ROUTE[0].lng : 121.563680;
+        let vehicleHeadingDeg = 0;
+        let targetHeadingDeg = 0;
+        let routeDistanceMeters = 0;
+        let currentRoadLabel = MapLogic ? MapLogic.DEMO_ROUTE[0].name : '信義區實景道路';
+        let hasLiveGpsFix = false;
+
+        let preferredMapZoom = 18.8;
+        let followCarCentered = true;
+        let pendingCameraPreset = false;
+        let isApplyingProgrammaticCam = false;
+        let radarZoomFactor = 1.0;
+        let lastZoomChangedMs = 0;
+        let demoRecenterTimer = null;
+        const activePointerIds = new Set();
+        let touchCount = 0;
+
         let pulsePhase = 0;
         let pathFlowPhase = 0;
         let pathWavePhase = 0;
+        let lastCamUpdateMs = 0;
 
-        // ================= 場景、攝影機與渲染器 =================
+        function clearDemoRecenterTimer() {
+            if (demoRecenterTimer) {
+                clearTimeout(demoRecenterTimer);
+                demoRecenterTimer = null;
+            }
+        }
+
+        function getActiveMapPointers() {
+            return Math.max(activePointerIds.size, touchCount);
+        }
+
+        mapEl.addEventListener('pointerdown', function (ev) {
+            if (ev && ev.pointerId !== undefined) activePointerIds.add(ev.pointerId);
+        }, { passive: true, capture: true });
+        function releaseMapPointer(ev) {
+            if (ev && ev.pointerId !== undefined) activePointerIds.delete(ev.pointerId);
+        }
+        window.addEventListener('pointerup', releaseMapPointer, { passive: true, capture: true });
+        window.addEventListener('pointercancel', releaseMapPointer, { passive: true, capture: true });
+        mapEl.addEventListener('touchstart', function (ev) {
+            touchCount = ev.touches ? ev.touches.length : 1;
+        }, { passive: true, capture: true });
+        function syncMapTouchCount(ev) {
+            touchCount = ev.touches ? ev.touches.length : 0;
+            if (touchCount === 0) activePointerIds.clear();
+        }
+        window.addEventListener('touchend', syncMapTouchCount, { passive: true, capture: true });
+        window.addEventListener('touchcancel', syncMapTouchCount, { passive: true, capture: true });
+
+        const isSoftwareHeadless = !!navigator.webdriver;
+
+        function isNightActive() {
+            if (themeMode === 2) return true;
+            if (themeMode === 1) return false;
+            const hr = new Date().getHours();
+            return hr < 6 || hr >= 18;
+        }
+
+        function showMapNotice(text) {
+            if (!text) {
+                mapNoticeEl.style.display = 'none';
+                return;
+            }
+            mapNoticeEl.textContent = text;
+            mapNoticeEl.style.display = 'block';
+        }
+
+        function syncHudButtons() {
+            const camNames = ['跟隨', '俯視', '360°'];
+            const themeNames = ['自動', '日間', '夜間'];
+            btnMapToggle.classList.toggle('active', mapViewEnabled);
+            btnMapToggle.textContent = mapViewEnabled ? '實景地圖' : '純車道雷達';
+            btnDemoDrive.classList.toggle('active', demoDrive);
+            btnRainbow.classList.toggle('active', rainbowEnabled);
+            btnCamera.textContent = '視角: ' + (camNames[cameraMode] || '跟隨');
+            btnTheme.textContent = '主題: ' + (themeNames[themeMode] || '自動');
+            btnRecenter.classList.toggle('recenter-needed', mapViewEnabled && !followCarCentered);
+
+            document.body.dataset.mapMode = mapViewEnabled ? 'maps' : 'radar';
+            document.body.dataset.demoDrive = demoDrive ? 'true' : 'false';
+
+            mapEl.classList.toggle('hidden', !mapViewEnabled);
+            updateCanvasVisibility();
+            updateBanner();
+        }
+
+        function updateBanner() {
+            if (demoDrive) {
+                statusDotEl.className = 'status-dot demo';
+                roadTitleEl.textContent = '模擬試駕 · ' + currentRoadLabel;
+            } else if (hasLiveGpsFix) {
+                statusDotEl.className = 'status-dot live';
+                roadTitleEl.textContent = mapViewEnabled ? 'GPS 實景導航同步中' : 'GPS 車道雷達模式';
+            } else {
+                statusDotEl.className = 'status-dot';
+                roadTitleEl.textContent = mapViewEnabled ? 'Google Maps 3D · ' + currentRoadLabel : '3D 車輛雷達展廳';
+            }
+            speedReadoutEl.textContent = Math.round(currentSpeedKmh) + ' km/h';
+        }
+
+        // ================= 獨立 Three.js 輔助渲染器（雷達模式 & WebGL2 備援層） =================
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.15, 280);
         const fsdLookAtBase = new THREE.Vector3(0, 0.48, 0);
         camera.position.set(0, 2.35, 4.4);
 
         const renderer = new THREE.WebGLRenderer({
-            antialias: true,
+            antialias: !isSoftwareHeadless,
             alpha: true,
             powerPreference: 'high-performance',
             stencil: false,
             depth: true
         });
-        // 針對高解析車機大螢幕最佳化像素比 (維持 MSAA 抗鋸齒銳利度同時減少 50% 以上像素著色負載)
         const rawDpr = window.devicePixelRatio || 1;
         const maxSide = Math.max(window.innerWidth, window.innerHeight);
-        const targetDpr = maxSide >= 1200 ? Math.min(rawDpr, 1.25) : Math.min(rawDpr, 1.4);
+        const targetDpr = isSoftwareHeadless ? 1.0 : (maxSide >= 1200 ? Math.min(rawDpr, 1.25) : Math.min(rawDpr, 1.4));
         renderer.setPixelRatio(targetDpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.outputEncoding = THREE.sRGBEncoding;
@@ -216,34 +429,30 @@
         });
         controls.addEventListener('end', function () {
             if (resetTimer) clearTimeout(resetTimer);
+            // 記錄使用者手動縮放距離，避免自動視角搶回原始距離
+            const dist = camera.position.distanceTo(controls.target);
+            const baseDist = cameraMode === 1 ? 27.6 : (cameraMode === 2 ? 5.2 : 4.9);
+            if (Number.isFinite(dist) && dist > 0.5) {
+                radarZoomFactor = Math.max(0.45, Math.min(3.2, dist / baseDist));
+            }
             const delay = currentSpeedKmh >= 2.0 ? 1500 : 4200;
             resetTimer = setTimeout(function () { isUserInteracting = false; }, delay);
         });
 
-        // ================= 動態日夜光影系統 =================
         const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.95);
         scene.add(ambientLight);
-
         const mainSun = new THREE.DirectionalLight(0xffffff, 1.35);
         mainSun.position.set(8, 16, 10);
         scene.add(mainSun);
-
         const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.75);
         fillLight.position.set(-8, 10, -12);
         scene.add(fillLight);
 
-        function isNightActive() {
-            if (themeMode === 2) return true;
-            if (themeMode === 1) return false;
-            const hr = new Date().getHours();
-            return hr < 6 || hr >= 18;
-        }
-
-        // 地面雷達掃描底盤 (距離遠方自然淡出至透明，與任何背景完美融合)
         const groundUniforms = {
             uNight: { value: isNightActive() ? 1.0 : 0.0 },
             uPulse: { value: 0.0 },
-            uSpeedNorm: { value: 0.0 }
+            uSpeedNorm: { value: 0.0 },
+            uMapActive: { value: mapViewEnabled ? 1.0 : 0.0 }
         };
         const groundDisc = new THREE.Mesh(
             new THREE.CircleGeometry(155, 64),
@@ -263,28 +472,27 @@
                     uniform float uNight;
                     uniform float uPulse;
                     uniform float uSpeedNorm;
+                    uniform float uMapActive;
                     void main() {
                         float r = length(vWorldPos.xy);
                         float fade = 1.0 - smoothstep(45.0, 150.0, r);
                         if (fade <= 0.005) discard;
-
                         vec3 dayCol = vec3(0.84, 0.89, 0.95);
                         vec3 nightCol = vec3(0.03, 0.06, 0.13);
                         vec3 col = mix(dayCol, nightCol, uNight);
 
-                        // 精緻空間微網格
                         float gx = abs(fract(vWorldPos.x * 0.125) - 0.5);
                         float gy = abs(fract(vWorldPos.y * 0.125) - 0.5);
                         float grid = 1.0 - smoothstep(0.0, 0.025, min(gx, gy));
                         vec3 gridCol = mix(vec3(0.55, 0.68, 0.82), vec3(0.14, 0.45, 0.68), uNight);
                         col = mix(col, gridCol, grid * mix(0.22, 0.35, uNight) * (1.0 - smoothstep(20.0, 95.0, r)));
 
-                        // 自車中心擴散雷達波紋
                         float pulseR = fract(uPulse) * 28.0;
                         float ring = exp(-pow((r - pulseR) * 0.65, 2.0)) * (1.0 - fract(uPulse));
                         col += vec3(0.15, 0.72, 0.98) * ring * (0.28 + 0.30 * uSpeedNorm);
 
-                        float alpha = fade * mix(0.28, 0.68, uNight);
+                        float baseAlpha = fade * mix(0.28, 0.68, uNight);
+                        float alpha = baseAlpha * mix(1.0, 0.18, uMapActive);
                         gl_FragColor = vec4(col, alpha);
                     }
                 `
@@ -294,11 +502,9 @@
         groundDisc.position.y = -0.01;
         scene.add(groundDisc);
 
-        // ================= 自車與動態物理燈光群組 =================
         const carRoot = new THREE.Group();
         scene.add(carRoot);
 
-        // 車底陰影
         const shadowCanvas = document.createElement('canvas');
         shadowCanvas.width = 256; shadowCanvas.height = 256;
         const sctx = shadowCanvas.getContext('2d');
@@ -313,6 +519,7 @@
         );
         shadowPlane.rotation.x = -Math.PI / 2;
         shadowPlane.position.y = 0.012;
+        shadowPlane.visible = false;
         carRoot.add(shadowPlane);
 
         let carModel = null;
@@ -321,12 +528,166 @@
         let frontWheels = [];
         let allWheels = [];
         let carHeight = 1.1;
-        let carRadius = 1.4;
+        let carWidthUnits = 1.28;
 
-        // 尚未載入 GLB 車模前先隱藏自車燈效與車底陰影
-        shadowPlane.visible = false;
+        function createPathShaderMaterial(uniforms) {
+            return new THREE.ShaderMaterial({
+                uniforms,
+                transparent: true,
+                depthWrite: false,
+                side: THREE.DoubleSide,
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+                `,
+                fragmentShader: `
+                    precision highp float;
+                    varying vec2 vUv;
+                    uniform float uFlow;
+                    uniform float uWave;
+                    uniform float uRainbow;
+                    uniform float uSpeedNorm;
+                    const float TAU = 6.2831853;
+                    vec3 rb(float t) {
+                        return 0.52 + 0.48 * cos(TAU * (t + vec3(0.0, 0.33, 0.67)));
+                    }
+                    void main() {
+                        float lat = vUv.x;
+                        float aLat = abs(lat);
+                        float dist = vUv.y;
+                        float farFade = smoothstep(30.0, 12.0, dist);
+                        float nearFade = smoothstep(-2.4, -0.5, dist);
+                        float sideFade = 1.0 - smoothstep(0.75, 1.0, aLat);
+                        float env = farFade * nearFade * sideFade;
+                        if (env <= 0.004) discard;
 
-        function attachModelAndFinish(obj) {
+                        float wave = exp(-pow((fract(dist * 0.24 + uWave - aLat * 0.28) - 0.5) * 4.2, 2.0));
+                        vec3 fsdCol = mix(vec3(0.08, 0.45, 0.85), vec3(0.22, 0.84, 1.0), 0.35 + 0.65 * wave);
+                        vec3 rainbowCol = rb(lat * 0.45 + dist * 0.07 + uFlow) * (0.85 + 0.25 * wave);
+                        vec3 col = mix(fsdCol, rainbowCol, uRainbow);
+
+                        float edgeLine = 1.0 - smoothstep(0.68, 0.78, aLat);
+                        float borderGlow = exp(-pow((aLat - 0.74) / 0.08, 2.0)) * 0.7;
+                        col = mix(col, vec3(0.88, 0.96, 1.0), borderGlow * 0.65);
+
+                        float alpha = env * (edgeLine * mix(0.32, 0.65, uRainbow) + borderGlow * 0.42 + wave * 0.14 * uSpeedNorm);
+                        gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.92));
+                    }
+                `
+            });
+        }
+
+        function createPathGeometry(segs, len, halfW) {
+            const positions = new Float32Array((segs + 1) * 2 * 3);
+            const uvs = new Float32Array((segs + 1) * 2 * 2);
+            const indices = [];
+            for (let i = 0; i <= segs; i++) {
+                const t = i / segs;
+                const z = 1.8 - len * t;
+                const idx = i * 2;
+                positions[idx * 3] = -halfW; positions[idx * 3 + 1] = 0; positions[idx * 3 + 2] = z;
+                positions[(idx + 1) * 3] = halfW; positions[(idx + 1) * 3 + 1] = 0; positions[(idx + 1) * 3 + 2] = z;
+                uvs[idx * 2] = -1.0; uvs[idx * 2 + 1] = -z;
+                uvs[(idx + 1) * 2] = 1.0; uvs[(idx + 1) * 2 + 1] = -z;
+                if (i < segs) indices.push(idx, idx + 1, idx + 2, idx + 1, idx + 3, idx + 2);
+            }
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+            geo.setIndex(indices);
+            return geo;
+        }
+
+        const PATH_SEGS = 64;
+        const PATH_LEN = 32.0;
+        const PATH_HALF_W = 1.15;
+        const pathGeo = createPathGeometry(PATH_SEGS, PATH_LEN, PATH_HALF_W);
+        const pathUniforms = {
+            uFlow: { value: 0.0 },
+            uWave: { value: 0.0 },
+            uRainbow: { value: rainbowEnabled ? 1.0 : 0.0 },
+            uSpeedNorm: { value: 0.0 }
+        };
+        const pathMesh = new THREE.Mesh(pathGeo, createPathShaderMaterial(pathUniforms));
+        pathMesh.position.y = 0.018;
+        scene.add(pathMesh);
+
+        let lastPathCurvature = 999.0;
+        function updatePredictivePathGeometry(geo, curvature, segs, len, halfW) {
+            const attr = geo.attributes.position;
+            const arr = attr.array;
+            for (let i = 0; i <= segs; i++) {
+                const t = i / segs;
+                const z = 1.8 - len * t;
+                const d = Math.max(0.0, -z - 0.5);
+                const cx = curvature * d * d * 0.025;
+                const slope = curvature * 2.0 * d * 0.025;
+                const inv = 1.0 / Math.sqrt(1.0 + slope * slope);
+                const idx = i * 2;
+                arr[idx * 3] = cx - halfW * inv;
+                arr[idx * 3 + 2] = z - halfW * slope * inv;
+                arr[(idx + 1) * 3] = cx + halfW * inv;
+                arr[(idx + 1) * 3 + 2] = z + halfW * slope * inv;
+            }
+            attr.needsUpdate = true;
+        }
+
+        // ================= Google Maps Vector + WebGLOverlayView 整合 =================
+        let gMap = null;
+        let webGLOverlay = null;
+        let overlayActive = false;
+        let overlayRenderer = null;
+        let overlayScene = null;
+        let overlayCamera = null;
+        let overlayCarAnchor = null;
+        let overlayCarBody = null;
+        let overlayWheels = [];
+        let overlayPathGeo = null;
+        let overlayPathMesh = null;
+        let overlayAmbient = null;
+        let overlaySun = null;
+
+        function updateCanvasVisibility() {
+            const hideThreeCanvas = mapViewEnabled && overlayActive;
+            container.classList.toggle('hidden', hideThreeCanvas);
+            container.classList.toggle('passthrough', mapViewEnabled && !hideThreeCanvas);
+            document.body.dataset.webglOverlay = overlayActive ? 'active' : (mapViewEnabled ? 'fallback' : 'off');
+        }
+
+        function getCurrentOverlayScale() {
+            const z = gMap ? (gMap.getZoom() || preferredMapZoom) : preferredMapZoom;
+            return MapLogic ? MapLogic.computeLaneMatchedCarScale(carWidthUnits, z) : 1.15;
+        }
+
+        function applyOverlayLaneScale() {
+            const s = getCurrentOverlayScale();
+            if (overlayCarBody) {
+                overlayCarBody.scale.setScalar(s);
+            }
+            if (overlayPathMesh) {
+                const pathScale = s / 1.15;
+                overlayPathMesh.scale.set(pathScale, 1, pathScale);
+            }
+        }
+
+        function syncCarIntoOverlay() {
+            if (!overlayCarBody || !carModel) return;
+            while (overlayCarBody.children.length > 0) {
+                overlayCarBody.remove(overlayCarBody.children[0]);
+            }
+            overlayWheels = [];
+            const clone = carModel.clone(true);
+            overlayCarBody.add(clone);
+            applyOverlayLaneScale();
+            clone.traverse((node) => {
+                if (node.name && /wheel|tire|rim|輪/i.test(node.name)) {
+                    overlayWheels.push(node);
+                }
+            });
+            if (webGLOverlay) webGLOverlay.requestRedraw();
+        }
+
+        function attachModelAndFinish(obj, sourceName) {
             carBodyGroup.add(obj);
             carModel = obj;
 
@@ -345,227 +706,427 @@
             obj.position.y -= box.min.y;
             obj.updateMatrixWorld(true);
 
-            const wheelSet = new Set();
-            obj.traverse(node => {
-                if (node.isMesh && node.name && /wheel|tire|rim|輪/i.test(node.name)) {
+            allWheels = [];
+            frontWheels = [];
+            obj.traverse((node) => {
+                if (node.name && /wheel|tire|rim|輪/i.test(node.name)) {
                     allWheels.push(node);
-                    wheelSet.add(node);
-                }
-            });
-            // 凍結靜態車身子節點矩陣更新，降低 CPU 每幀運算開銷（輪胎與主車身維持動態更新）
-            obj.traverse(node => {
-                if (!wheelSet.has(node)) {
-                    let p = node.parent;
-                    let hasWheelChild = false;
-                    node.traverse(ch => { if (wheelSet.has(ch)) hasWheelChild = true; });
-                    if (!hasWheelChild) {
-                        node.updateMatrix();
-                        node.matrixAutoUpdate = false;
-                    }
                 }
             });
 
             const alignedBox = new THREE.Box3().setFromObject(carBodyGroup);
             const alignedCenter = alignedBox.getCenter(new THREE.Vector3());
-            const sphere = new THREE.Sphere();
-            alignedBox.getBoundingSphere(sphere);
-
             carHeight = alignedBox.max.y - alignedBox.min.y;
-            carRadius = Math.max(1.0, sphere.radius);
+            carWidthUnits = Math.max(0.6, alignedBox.max.x - alignedBox.min.x);
             fsdLookAtBase.set(alignedCenter.x, alignedCenter.y + carHeight * 0.12, alignedCenter.z);
             shadowPlane.visible = true;
 
+            document.body.dataset.carSource = sourceName;
+            syncCarIntoOverlay();
             loading.style.display = 'none';
         }
 
-        // 載入 assets/carnew.glb 或使用者匯入的自訂模型檔
+        // 載入您的 GLB 車輛模型 (app/src/main/assets/carnew.glb 或 custom_car.glb)
         const maxAniso = Math.min(2, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
         const loader = new THREE.GLTFLoader();
-        loader.load(modelUrl, function (gltf) {
-            const loaded = gltf.scene;
-            loaded.traverse(node => {
-                if (node.isMesh && node.material) {
-                    const mats = Array.isArray(node.material) ? node.material : [node.material];
-                    mats.forEach(m => {
-                        if (!m) return;
-                        m.side = m.transparent ? THREE.DoubleSide : THREE.FrontSide;
-                        [m.map, m.normalMap, m.roughnessMap, m.metalnessMap].forEach(tex => {
-                            if (tex) {
-                                tex.anisotropy = maxAniso;
-                                if (tex === m.map) tex.encoding = THREE.sRGBEncoding;
-                            }
+        loader.load(
+            modelUrl,
+            function (gltf) {
+                const loaded = gltf.scene;
+                loaded.traverse((node) => {
+                    if (node.isMesh && node.material) {
+                        const mats = Array.isArray(node.material) ? node.material : [node.material];
+                        mats.forEach((m) => {
+                            if (!m) return;
+                            m.side = m.transparent ? THREE.DoubleSide : THREE.FrontSide;
+                            [m.map, m.normalMap, m.roughnessMap, m.metalnessMap].forEach((tex) => {
+                                if (tex) {
+                                    tex.anisotropy = maxAniso;
+                                    if (tex === m.map) tex.encoding = THREE.sRGBEncoding;
+                                }
+                            });
                         });
-                    });
+                    }
+                });
+                attachModelAndFinish(loaded, 'glb');
+            },
+            function (xhr) {
+                if (loadTextEl && xhr && xhr.total > 0) {
+                    const pct = Math.min(99, Math.round((xhr.loaded / xhr.total) * 100));
+                    loadTextEl.innerText = '載入 3D 車輛模型... ' + pct + '%';
                 }
+            },
+            function () {
+                document.body.dataset.carSource = 'missing-glb';
+                loading.style.display = 'none';
+                showMapNotice('未找到 GLB 車模，請將您的車模放入 app/src/main/assets/' + modelUrl);
+            }
+        );
+
+        async function resolveMapsApiKey() {
+            if (window.AndroidBridge && typeof window.AndroidBridge.getMapsApiKey === 'function') {
+                const bridgeKey = window.AndroidBridge.getMapsApiKey();
+                if (bridgeKey) return bridgeKey.trim();
+            }
+            return '';
+        }
+
+        function loadGoogleMapsBootstrap(apiKey) {
+            return new Promise((resolve, reject) => {
+                if (window.google && window.google.maps && window.google.maps.importLibrary) {
+                    resolve();
+                    return;
+                }
+                (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+                    key: apiKey,
+                    v: "weekly",
+                    language: "zh-TW",
+                    region: "TW"
+                });
+                resolve();
             });
-            attachModelAndFinish(loaded);
-        }, function (xhr) {
-            if (loadTextEl && xhr && xhr.total > 0) {
-                const pct = Math.min(99, Math.round((xhr.loaded / xhr.total) * 100));
-                loadTextEl.innerText = '載入立體車輛模型... ' + pct + '%';
-            }
-        }, function () {
-            if (loadTextEl) {
-                loadTextEl.innerText = '找不到 carnew.glb，請放入資料夾或至設定匯入';
-            }
-            const spinner = loading.querySelector('.spinner');
-            if (spinner) spinner.style.display = 'none';
-            setTimeout(function () { loading.style.display = 'none'; }, 3500);
-        });
-
-        // ================= 自車前方預測路徑光帶 (含彩虹大道 / 輔助光帶) =================
-        const PATH_SEGS = 64;
-        const PATH_LEN = 32.0;
-        const PATH_HALF_W = 1.15;
-        const pathPositions = new Float32Array((PATH_SEGS + 1) * 2 * 3);
-        const pathUvs = new Float32Array((PATH_SEGS + 1) * 2 * 2);
-        const pathIndices = [];
-        for (let i = 0; i <= PATH_SEGS; i++) {
-            const t = i / PATH_SEGS;
-            const z = 1.8 - PATH_LEN * t;
-            const idx = i * 2;
-            pathPositions[idx * 3] = -PATH_HALF_W; pathPositions[idx * 3 + 1] = 0; pathPositions[idx * 3 + 2] = z;
-            pathPositions[(idx + 1) * 3] = PATH_HALF_W; pathPositions[(idx + 1) * 3 + 1] = 0; pathPositions[(idx + 1) * 3 + 2] = z;
-            pathUvs[idx * 2] = -1.0; pathUvs[idx * 2 + 1] = -z;
-            pathUvs[(idx + 1) * 2] = 1.0; pathUvs[(idx + 1) * 2 + 1] = -z;
-            if (i < PATH_SEGS) {
-                pathIndices.push(idx, idx + 1, idx + 2, idx + 1, idx + 3, idx + 2);
-            }
         }
-        const pathGeo = new THREE.BufferGeometry();
-        pathGeo.setAttribute('position', new THREE.BufferAttribute(pathPositions, 3));
-        pathGeo.setAttribute('uv', new THREE.BufferAttribute(pathUvs, 2));
-        pathGeo.setIndex(pathIndices);
 
-        const pathUniforms = {
-            uFlow: { value: 0.0 },
-            uWave: { value: 0.0 },
-            uRainbow: { value: rainbowEnabled ? 1.0 : 0.0 },
-            uSpeedNorm: { value: 0.0 }
+        window.gm_authFailure = function () {
+            showMapNotice('Google Maps 授權失敗，已切換至車道雷達檢視');
+            overlayActive = false;
+            mapViewEnabled = false;
+            syncHudButtons();
         };
-        const pathMesh = new THREE.Mesh(pathGeo, new THREE.ShaderMaterial({
-            uniforms: pathUniforms,
-            transparent: true,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-            vertexShader: `
-                varying vec2 vUv;
-                void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
-            `,
-            fragmentShader: `
-                precision highp float;
-                varying vec2 vUv;
-                uniform float uFlow;
-                uniform float uWave;
-                uniform float uRainbow;
-                uniform float uSpeedNorm;
-                const float TAU = 6.2831853;
-                vec3 rb(float t) {
-                    return 0.52 + 0.48 * cos(TAU * (t + vec3(0.0, 0.33, 0.67)));
-                }
-                void main() {
-                    float lat = vUv.x;
-                    float aLat = abs(lat);
-                    float dist = vUv.y;
-                    float farFade = smoothstep(30.0, 12.0, dist);
-                    float nearFade = smoothstep(-2.4, -0.5, dist);
-                    float sideFade = 1.0 - smoothstep(0.75, 1.0, aLat);
-                    float env = farFade * nearFade * sideFade;
-                    if (env <= 0.004) discard;
 
-                    float wave = exp(-pow((fract(dist * 0.24 + uWave - aLat * 0.28) - 0.5) * 4.2, 2.0));
-                    vec3 fsdCol = mix(vec3(0.08, 0.45, 0.85), vec3(0.22, 0.84, 1.0), 0.35 + 0.65 * wave);
-                    vec3 rainbowCol = rb(lat * 0.45 + dist * 0.07 + uFlow) * (0.85 + 0.25 * wave);
-                    vec3 col = mix(fsdCol, rainbowCol, uRainbow);
-
-                    float edgeLine = 1.0 - smoothstep(0.68, 0.78, aLat);
-                    float borderGlow = exp(-pow((aLat - 0.74) / 0.08, 2.0)) * 0.7;
-                    col = mix(col, vec3(0.88, 0.96, 1.0), borderGlow * 0.65);
-
-                    float alpha = env * (edgeLine * mix(0.32, 0.65, uRainbow) + borderGlow * 0.42 + wave * 0.14 * uSpeedNorm);
-                    gl_FragColor = vec4(col, clamp(alpha, 0.0, 0.92));
-                }
-            `
-        }));
-        pathMesh.position.y = 0.018;
-        scene.add(pathMesh);
-
-        let lastPathCurvature = 999.0;
-        function updatePredictivePath(curvature) {
-            if (Math.abs(curvature - lastPathCurvature) < 0.0015) return;
-            lastPathCurvature = curvature;
-            const attr = pathGeo.attributes.position;
-            const arr = attr.array;
-            for (let i = 0; i <= PATH_SEGS; i++) {
-                const t = i / PATH_SEGS;
-                const z = 1.8 - PATH_LEN * t;
-                const d = Math.max(0.0, -z - 0.5);
-                const cx = curvature * d * d * 0.025;
-                const slope = curvature * 2.0 * d * 0.025;
-                const inv = 1.0 / Math.sqrt(1.0 + slope * slope);
-                const idx = i * 2;
-                arr[idx * 3] = cx - PATH_HALF_W * inv;
-                arr[idx * 3 + 2] = z - PATH_HALF_W * slope * inv;
-                arr[(idx + 1) * 3] = cx + PATH_HALF_W * inv;
-                arr[(idx + 1) * 3 + 2] = z + PATH_HALF_W * slope * inv;
-            }
-            attr.needsUpdate = true;
+        function getTargetMapColorScheme() {
+            if (!window.google || !google.maps || !google.maps.ColorScheme) return undefined;
+            if (themeMode === 2) return google.maps.ColorScheme.DARK;
+            if (themeMode === 1) return google.maps.ColorScheme.LIGHT;
+            return isNightActive() ? google.maps.ColorScheme.DARK : google.maps.ColorScheme.LIGHT;
         }
-        const worldPivot = new THREE.Group();
-        scene.add(worldPivot);
 
-        // ================= GPS 狀態 =================
+        async function initGoogleMaps() {
+            const apiKey = await resolveMapsApiKey();
+            if (!apiKey) {
+                showMapNotice('未設定 Google Maps API 金鑰，已啟用純 3D 車道模式');
+                mapViewEnabled = false;
+                syncHudButtons();
+                return;
+            }
 
-        window.setGpsData = function (kmh, bearingDeg) {
+            try {
+                await loadGoogleMapsBootstrap(apiKey);
+                const { Map, WebGLOverlayView, RenderingType } = await google.maps.importLibrary('maps');
+
+                const initScheme = getTargetMapColorScheme();
+                gMap = new Map(mapEl, {
+                    center: { lat: vehicleLat, lng: vehicleLng },
+                    zoom: preferredMapZoom,
+                    tilt: cameraMode === 1 ? 0 : 62,
+                    heading: vehicleHeadingDeg,
+                    mapId: 'DEMO_MAP_ID',
+                    renderingType: RenderingType ? RenderingType.VECTOR : 'VECTOR',
+                    colorScheme: initScheme,
+                    disableDefaultUI: true,
+                    gestureHandling: 'greedy',
+                    minZoom: 12,
+                    maxZoom: 21.5,
+                    internalUsageAttributionIds: ['gmp_mcp_codeassist_v1_aistudio'],
+                });
+
+                gMap.addListener('zoom_changed', function () {
+                    lastZoomChangedMs = performance.now();
+                    const z = gMap.getZoom();
+                    if (Number.isFinite(z)) {
+                        preferredMapZoom = z;
+                        applyOverlayLaneScale();
+                        if (webGLOverlay && overlayActive) webGLOverlay.requestRedraw();
+                    }
+                    // 雙指縮放若同時誤觸 dragstart，立即恢復跟車狀態
+                    if (demoDrive && !followCarCentered) {
+                        clearDemoRecenterTimer();
+                        followCarCentered = true;
+                        syncHudButtons();
+                    }
+                });
+
+                gMap.addListener('dragstart', function () {
+                    const keepFollowing = MapLogic
+                        ? MapLogic.shouldKeepFollowingOnDrag({
+                            isProgrammatic: isApplyingProgrammaticCam,
+                            activePointers: getActiveMapPointers(),
+                            nowMs: performance.now(),
+                            lastZoomMs: lastZoomChangedMs
+                        })
+                        : isApplyingProgrammaticCam;
+                    if (keepFollowing) return;
+                    clearDemoRecenterTimer();
+                    if (followCarCentered) {
+                        followCarCentered = false;
+                        syncHudButtons();
+                    }
+                });
+
+                gMap.addListener('dragend', function () {
+                    if (demoDrive && !followCarCentered) {
+                        clearDemoRecenterTimer();
+                        demoRecenterTimer = setTimeout(function () {
+                            demoRecenterTimer = null;
+                            if (demoDrive) {
+                                followCarCentered = true;
+                                syncHudButtons();
+                                syncMapCameraNow(false);
+                            }
+                        }, 3500);
+                    }
+                });
+
+                // 當 Vector 地圖就緒時，直接把 Three.js 車輛放進 Google Maps 3D 世界裡
+                webGLOverlay = new WebGLOverlayView();
+                webGLOverlay.onAdd = function () {
+                    overlayScene = new THREE.Scene();
+                    overlayCamera = new THREE.PerspectiveCamera();
+
+                    overlayAmbient = new THREE.AmbientLight(0xffffff, 1.05);
+                    overlayScene.add(overlayAmbient);
+                    overlaySun = new THREE.DirectionalLight(0xffffff, 1.35);
+                    overlaySun.position.set(12, 16, 28);
+                    overlayScene.add(overlaySun);
+
+                    // Z-up (Google Maps) <-> Y-up (Three.js) 轉換群組
+                    const mapUpGroup = new THREE.Group();
+                    mapUpGroup.rotation.x = Math.PI / 2;
+                    overlayScene.add(mapUpGroup);
+
+                    overlayCarAnchor = new THREE.Group();
+                    mapUpGroup.add(overlayCarAnchor);
+
+                    overlayCarBody = new THREE.Group();
+                    overlayCarAnchor.add(overlayCarBody);
+
+                    overlayPathGeo = createPathGeometry(48, 28.0, 0.72);
+                    overlayPathMesh = new THREE.Mesh(overlayPathGeo, createPathShaderMaterial(pathUniforms));
+                    overlayPathMesh.position.y = 0.08;
+                    overlayCarAnchor.add(overlayPathMesh);
+
+                    syncCarIntoOverlay();
+                };
+
+                webGLOverlay.onContextRestored = function ({ gl }) {
+                    overlayRenderer = new THREE.WebGLRenderer({
+                        canvas: gl.canvas,
+                        context: gl,
+                        ...gl.getContextAttributes(),
+                    });
+                    overlayRenderer.autoClear = false;
+                    overlayRenderer.outputEncoding = THREE.sRGBEncoding;
+                };
+
+                webGLOverlay.onDraw = function ({ transformer }) {
+                    if (!overlayRenderer || !overlayScene || !overlayCamera) return;
+                    if (!overlayActive) {
+                        overlayActive = true;
+                        updateCanvasVisibility();
+                    }
+                    applyOverlayLaneScale();
+                    const matrix = transformer.fromLatLngAltitude({
+                        lat: vehicleLat,
+                        lng: vehicleLng,
+                        altitude: 0.25,
+                    });
+                    overlayCamera.projectionMatrix.fromArray(matrix);
+                    overlayRenderer.render(overlayScene, overlayCamera);
+                    overlayRenderer.resetState();
+                    if (demoDrive || currentSpeedKmh > 0.3) {
+                        webGLOverlay.requestRedraw();
+                    }
+                };
+
+                webGLOverlay.onContextLost = function () {
+                    overlayActive = false;
+                    updateCanvasVisibility();
+                };
+
+                webGLOverlay.onRemove = function () {
+                    overlayActive = false;
+                    overlayRenderer = null;
+                    updateCanvasVisibility();
+                };
+
+                webGLOverlay.setMap(gMap);
+            } catch (err) {
+                console.warn('Google Maps load fallback:', err);
+                showMapNotice('圖資連線異常，已切換為車道雷達檢視');
+                overlayActive = false;
+                mapViewEnabled = false;
+                syncHudButtons();
+            }
+        }
+
+        // ================= GPS & Web 介面控制 =================
+        window.setGpsData = function (kmh, bearingDeg, lat, lng) {
             const speed = Math.max(0, Number(kmh) || 0);
             const now = performance.now();
             if (speed >= 3.0 && demoDrive) {
                 demoDrive = false;
+                syncHudButtons();
             }
             if (!demoDrive) {
                 targetSpeedKmh = speed;
             }
-            if (bearingDeg !== undefined && bearingDeg !== null && bearingDeg >= 0 && !demoDrive) {
+            const parsedLat = Number(lat);
+            const parsedLng = Number(lng);
+            if (!demoDrive && Number.isFinite(parsedLat) && Number.isFinite(parsedLng)) {
+                vehicleLat = parsedLat;
+                vehicleLng = parsedLng;
+                hasLiveGpsFix = true;
+            }
+            if (bearingDeg !== undefined && bearingDeg !== null && Number(bearingDeg) >= 0 && !demoDrive) {
+                const b = ((Number(bearingDeg) % 360) + 360) % 360;
+                targetHeadingDeg = b;
                 if (prevBearingDeg >= 0) {
-                    let diff = bearingDeg - prevBearingDeg;
-                    if (diff > 180) diff -= 360;
-                    if (diff < -180) diff += 360;
+                    const diff = MapLogic ? MapLogic.normalizeAngleDiffDeg(b, prevBearingDeg) : (b - prevBearingDeg);
                     const dtSec = Math.max(0.25, Math.min(3.0, (now - lastBearingTimeMs) / 1000.0));
                     if (Math.abs(diff) >= 0.8) {
                         const turnRate = Math.max(-45.0, Math.min(45.0, diff / dtSec));
                         targetCurvature = Math.max(-1.6, Math.min(1.6, turnRate / 22.0));
                     }
                 }
-                prevBearingDeg = bearingDeg;
+                prevBearingDeg = b;
                 lastBearingTimeMs = now;
             }
+            updateBanner();
         };
 
-
-        // ================= JS API 控制介面 =================
+        function syncMapCameraNow(includePreset) {
+            if (!gMap || !mapViewEnabled) return;
+            const now = performance.now();
+            lastCamUpdateMs = now;
+            isApplyingProgrammaticCam = true;
+            try {
+                const camUpdate = {
+                    center: { lat: vehicleLat, lng: vehicleLng },
+                    heading: cameraMode === 2 ? ((now * 0.018) % 360) : vehicleHeadingDeg,
+                };
+                if (includePreset || pendingCameraPreset) {
+                    camUpdate.tilt = cameraMode === 1 ? 0 : (cameraMode === 2 ? 64 : 62);
+                    pendingCameraPreset = false;
+                }
+                gMap.moveCamera(camUpdate);
+            } finally {
+                isApplyingProgrammaticCam = false;
+            }
+            if (webGLOverlay && overlayActive) webGLOverlay.requestRedraw();
+        }
 
         window.setDemoDrive = function (enabled) {
             demoDrive = !!enabled;
+            clearDemoRecenterTimer();
+            activePointerIds.clear();
+            touchCount = 0;
             if (demoDrive) {
-                demoZ = 0;
+                followCarCentered = true;
+                pendingCameraPreset = true;
+                if (MapLogic) {
+                    const pose = MapLogic.sampleRouteAtDistance(routeDistanceMeters);
+                    vehicleLat = pose.lat;
+                    vehicleLng = pose.lng;
+                    vehicleHeadingDeg = pose.bearingDeg;
+                    targetHeadingDeg = pose.bearingDeg;
+                    currentRoadLabel = pose.segmentName;
+                }
             } else {
                 targetSpeedKmh = 0;
                 targetCurvature = 0;
+            }
+            syncHudButtons();
+            if (demoDrive) {
+                syncMapCameraNow(true);
+            }
+            if (window.AndroidBridge && typeof window.AndroidBridge.setDemoDrive === 'function') {
+                try { window.AndroidBridge.setDemoDrive(demoDrive); } catch (_) {}
             }
         };
 
         window.setRainbowRoad = function (enabled) {
             rainbowEnabled = !!enabled;
+            syncHudButtons();
+            if (webGLOverlay && overlayActive) webGLOverlay.requestRedraw();
+            if (window.AndroidBridge && typeof window.AndroidBridge.setRainbowRoad === 'function') {
+                try { window.AndroidBridge.setRainbowRoad(rainbowEnabled); } catch (_) {}
+            }
         };
 
         window.setCameraMode = function (mode) {
             cameraMode = Math.max(0, Math.min(2, Number(mode) || 0));
             isUserInteracting = false;
+            followCarCentered = true;
+            pendingCameraPreset = true;
+            syncHudButtons();
+            if (window.AndroidBridge && typeof window.AndroidBridge.setCameraMode === 'function') {
+                try { window.AndroidBridge.setCameraMode(cameraMode); } catch (_) {}
+            }
         };
 
         window.setThemeMode = function (mode) {
             themeMode = Math.max(0, Math.min(2, Number(mode) || 0));
+            if (gMap) {
+                gMap.setOptions({ colorScheme: getTargetMapColorScheme() });
+            }
+            syncHudButtons();
+            if (window.AndroidBridge && typeof window.AndroidBridge.setThemeMode === 'function') {
+                try { window.AndroidBridge.setThemeMode(themeMode); } catch (_) {}
+            }
         };
+
+        function adjustViewZoom(deltaStep) {
+            if (mapViewEnabled && gMap) {
+                const currentZ = gMap.getZoom() || preferredMapZoom;
+                const nextZ = Math.max(12, Math.min(21.5, currentZ + deltaStep));
+                preferredMapZoom = nextZ;
+                isApplyingProgrammaticCam = true;
+                try {
+                    gMap.moveCamera({ zoom: nextZ });
+                } finally {
+                    isApplyingProgrammaticCam = false;
+                }
+                applyOverlayLaneScale();
+                if (webGLOverlay && overlayActive) webGLOverlay.requestRedraw();
+            } else {
+                const factorDelta = deltaStep > 0 ? 0.8 : 1.25;
+                radarZoomFactor = Math.max(0.45, Math.min(3.2, radarZoomFactor * factorDelta));
+                isUserInteracting = false;
+            }
+        }
+
+        // ================= 瀏覽器/Web 互動控制 =================
+        btnMapToggle.addEventListener('click', function () {
+            mapViewEnabled = !mapViewEnabled;
+            syncHudButtons();
+        });
+        btnDemoDrive.addEventListener('click', function () {
+            window.setDemoDrive(!demoDrive);
+        });
+        btnRainbow.addEventListener('click', function () {
+            window.setRainbowRoad(!rainbowEnabled);
+        });
+        btnCamera.addEventListener('click', function () {
+            window.setCameraMode((cameraMode + 1) % 3);
+        });
+        btnTheme.addEventListener('click', function () {
+            window.setThemeMode((themeMode + 1) % 3);
+        });
+        btnZoomIn.addEventListener('click', function () {
+            adjustViewZoom(0.8);
+        });
+        btnZoomOut.addEventListener('click', function () {
+            adjustViewZoom(-0.8);
+        });
+        btnRecenter.addEventListener('click', function () {
+            clearDemoRecenterTimer();
+            followCarCentered = true;
+            pendingCameraPreset = true;
+            radarZoomFactor = 1.0;
+            isUserInteracting = false;
+            syncHudButtons();
+            syncMapCameraNow(true);
+        });
 
         window.addEventListener('resize', function () {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -573,80 +1134,95 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }, false);
 
-        // ================= 60fps 主渲染迴圈 =================
+        // ================= 主模擬與 3D 動畫迴圈 =================
         let prevFrameTime = performance.now();
         let lastRenderTime = 0;
         let lastNightVal = -1;
+        let lastBannerTime = 0;
         const desiredCamPos = new THREE.Vector3();
 
         function animate(now) {
             requestAnimationFrame(animate);
 
-            const isActive = (currentSpeedKmh >= 0.3 || targetSpeedKmh >= 0.3 || isUserInteracting || demoDrive || cameraMode === 2 || Math.abs(currentCurvature) > 0.01);
-            if (!isActive && (now - lastRenderTime) < 40) return;
+            const isActive =
+                currentSpeedKmh >= 0.3 ||
+                targetSpeedKmh >= 0.3 ||
+                isUserInteracting ||
+                demoDrive ||
+                cameraMode === 2 ||
+                Math.abs(currentCurvature) > 0.01;
+
+            const minInterval = isSoftwareHeadless && !isActive ? 120 : (!isActive ? 45 : 0);
+            if ((now - lastRenderTime) < minInterval) return;
             lastRenderTime = now;
 
             const dt = Math.min(0.05, Math.max(0.001, (now - prevFrameTime) / 1000.0));
             prevFrameTime = now;
 
-            // 日夜光影平滑插值（僅在數值變動時寫入材質）
             const nightTarget = isNightActive() ? 1.0 : 0.0;
             groundUniforms.uNight.value += (nightTarget - groundUniforms.uNight.value) * Math.min(1.0, dt * 4.0);
+            groundUniforms.uMapActive.value += ((mapViewEnabled ? 1.0 : 0.0) - groundUniforms.uMapActive.value) * Math.min(1.0, dt * 6.0);
             const nVal = groundUniforms.uNight.value;
             if (Math.abs(nVal - lastNightVal) > 0.002) {
                 lastNightVal = nVal;
                 ambientLight.intensity = 1.25 - nVal * 0.45;
                 mainSun.intensity = 1.45 - nVal * 0.40;
+                if (overlayAmbient && overlaySun) {
+                    overlayAmbient.intensity = 1.15 - nVal * 0.25;
+                    overlaySun.intensity = 1.4 - nVal * 0.3;
+                }
             }
 
-            // 駕駛狀態更新（模擬試駕 vs 真實 GPS）
             if (demoDrive) {
                 const t = now * 0.001;
-                const K = (Math.PI * 2.0) / 200.0;
-                targetSpeedKmh = 48.0 + 26.0 * Math.sin(t * 0.55);
-                const mps = currentSpeedKmh / 3.6;
-                demoZ -= mps * dt;
-                if (demoZ <= -200.0) demoZ += 200.0;
-
-                const roadX = Math.sin(demoZ * K) * 14.0;
-                const roadSlope = Math.cos(demoZ * K) * 14.0 * K;
-                const heading = Math.atan2(-roadSlope, 1.0);
-                targetCurvature = Math.max(-1.3, Math.min(1.3, -roadSlope * 2.2));
-
-                worldPivot.rotation.y = heading;
+                targetSpeedKmh = 46.0 + 18.0 * Math.sin(t * 0.45);
+                const stepMps = Math.max(4.0, currentSpeedKmh / 3.6);
+                if (MapLogic) {
+                    const pose = MapLogic.stepDemoRoute(routeDistanceMeters, stepMps, dt);
+                    routeDistanceMeters = pose.progressMeters;
+                    vehicleLat = pose.lat;
+                    vehicleLng = pose.lng;
+                    targetHeadingDeg = pose.bearingDeg;
+                    targetCurvature = pose.curvature;
+                    currentRoadLabel = pose.segmentName;
+                }
             } else {
                 targetCurvature *= Math.exp(-dt * 0.85);
             }
 
-            // 速度與轉向平順濾波
             const prevSpeed = currentSpeedKmh;
             currentSpeedKmh += (targetSpeedKmh - currentSpeedKmh) * Math.min(1.0, dt * 3.8);
             if (currentSpeedKmh < 0.15 && targetSpeedKmh === 0) currentSpeedKmh = 0;
             currentCurvature += (targetCurvature - currentCurvature) * Math.min(1.0, dt * 4.5);
 
-            const accel = (currentSpeedKmh - prevSpeed) / dt;
-            const isBraking = (targetSpeedKmh < currentSpeedKmh - 2.0) || (accel < -4.5) || (demoDrive && Math.cos(now * 0.00055) < -0.75);
-            const targetBrake = isBraking ? 1.0 : 0.0;
-            brakeIntensity += (targetBrake - brakeIntensity) * Math.min(1.0, dt * 8.0);
+            const headingDiff = MapLogic ? MapLogic.normalizeAngleDiffDeg(targetHeadingDeg, vehicleHeadingDeg) : 0;
+            vehicleHeadingDeg = (vehicleHeadingDeg + headingDiff * Math.min(1.0, dt * 5.0) + 360) % 360;
 
-            // 車身加減速俯仰、側傾、輪胎旋轉與前輪轉向
+            const accel = (currentSpeedKmh - prevSpeed) / dt;
             const targetPitch = Math.max(-0.04, Math.min(0.04, -accel * 0.0018));
             const targetRoll = Math.max(-0.04, Math.min(0.04, -currentCurvature * 0.025 * Math.min(1.0, currentSpeedKmh / 40.0)));
+
             carBodyGroup.rotation.x += (targetPitch - carBodyGroup.rotation.x) * Math.min(1.0, dt * 6.0);
             carBodyGroup.rotation.z += (targetRoll - carBodyGroup.rotation.z) * Math.min(1.0, dt * 6.0);
+            if (overlayCarBody && overlayCarAnchor) {
+                overlayCarAnchor.rotation.y = -(vehicleHeadingDeg * Math.PI) / 180;
+                overlayCarBody.rotation.x = carBodyGroup.rotation.x;
+                overlayCarBody.rotation.z = carBodyGroup.rotation.z;
+            }
 
             const mps = currentSpeedKmh / 3.6;
             const wheelStep = (mps * dt) / 0.26;
-            for (let i = 0; i < allWheels.length; i++) {
-                allWheels[i].rotation.x -= wheelStep;
-            }
-            const steerAngle = Math.max(-0.42, Math.min(0.42, -currentCurvature * 0.28));
-            for (let i = 0; i < frontWheels.length; i++) {
-                frontWheels[i].rotation.y += (steerAngle - frontWheels[i].rotation.y) * Math.min(1.0, dt * 8.0);
+            for (let i = 0; i < allWheels.length; i++) allWheels[i].rotation.x -= wheelStep;
+            for (let i = 0; i < overlayWheels.length; i++) overlayWheels[i].rotation.x -= wheelStep;
+
+            if (Math.abs(currentCurvature - lastPathCurvature) >= 0.0015) {
+                lastPathCurvature = currentCurvature;
+                updatePredictivePathGeometry(pathGeo, currentCurvature, PATH_SEGS, PATH_LEN, PATH_HALF_W);
+                if (overlayPathGeo) {
+                    updatePredictivePathGeometry(overlayPathGeo, currentCurvature, 48, 28.0, 0.72);
+                }
             }
 
-            // 預測路徑與著色器更新
-            updatePredictivePath(currentCurvature);
             const speedNorm = Math.min(1.0, currentSpeedKmh / 100.0);
             pathFlowPhase = (pathFlowPhase + mps * 0.055 * dt) % 1.0;
             pathWavePhase = (pathWavePhase + mps * 0.15 * dt) % 1.0;
@@ -659,25 +1235,63 @@
             groundUniforms.uPulse.value = pulsePhase;
             groundUniforms.uSpeedNorm.value = speedNorm;
 
-            // 攝影機視角平滑過渡（使用者觸控時暫時交由手動旋轉）
-            if (!isUserInteracting) {
-                if (cameraMode === 1) {
-                    desiredCamPos.set(0, 26.0 + speedNorm * 6.0, 9.5);
-                } else if (cameraMode === 2) {
-                    const angle = now * 0.00028;
-                    desiredCamPos.set(Math.sin(angle) * 4.8, 2.1, Math.cos(angle) * 4.8);
-                } else {
-                    desiredCamPos.set(0, 2.25 + speedNorm * 0.35, 4.35 + speedNorm * 1.15);
-                }
-                camera.position.lerp(desiredCamPos, Math.min(1.0, dt * 3.2));
-                controls.target.lerp(fsdLookAtBase, Math.min(1.0, dt * 5.0));
+            // 同步 Google Maps 攝影機中心與航向（每一幀同步更新，確保車輛始終位於地圖視窗中心）
+            const activePointers = getActiveMapPointers();
+            const shouldMoveMap =
+                gMap &&
+                mapViewEnabled &&
+                (pendingCameraPreset || (followCarCentered && activePointers === 0 && (demoDrive || currentSpeedKmh >= 0.25 || cameraMode === 2))) &&
+                (now - lastCamUpdateMs >= (isSoftwareHeadless ? 100 : 14));
+
+            if (shouldMoveMap) {
+                syncMapCameraNow(pendingCameraPreset);
             }
 
-            controls.update();
-            if (camera.position.y < 0.35) camera.position.y = 0.35;
-            renderer.render(scene, camera);
+            if (webGLOverlay && overlayActive && (demoDrive || currentSpeedKmh > 0.3)) {
+                webGLOverlay.requestRedraw();
+            }
+
+            if (!(mapViewEnabled && overlayActive)) {
+                if (!isUserInteracting) {
+                    let fallbackScale = radarZoomFactor;
+                    if (mapViewEnabled) {
+                        const z = gMap ? (gMap.getZoom() || preferredMapZoom) : preferredMapZoom;
+                        const latRad = (vehicleLat * Math.PI) / 180;
+                        const metersPerPx = (156543.03392 * Math.cos(latRad)) / Math.pow(2, z);
+                        const viewH = Math.max(240, window.innerHeight || 600);
+                        const targetCarWidthMeters = MapLogic
+                            ? MapLogic.computeLaneMatchedCarScale(carWidthUnits, z) * carWidthUnits
+                            : 1.48;
+                        const targetCarWidthPx = Math.max(18, targetCarWidthMeters / Math.max(0.02, metersPerPx));
+                        const tanHalfFov = Math.tan((46 * 0.5 * Math.PI) / 180);
+                        const desiredDist = (carWidthUnits * viewH) / (2 * tanHalfFov * targetCarWidthPx);
+                        const baseDist = cameraMode === 1 ? 27.6 : (cameraMode === 2 ? 5.2 : 4.9);
+                        fallbackScale = Math.max(0.85, Math.min(24.0, desiredDist / baseDist));
+                    }
+                    if (cameraMode === 1) {
+                        desiredCamPos.set(0, (26.0 + speedNorm * 6.0) * fallbackScale, 9.5 * fallbackScale);
+                    } else if (cameraMode === 2) {
+                        const angle = now * 0.00028;
+                        desiredCamPos.set(Math.sin(angle) * 4.8 * fallbackScale, 2.1 * fallbackScale, Math.cos(angle) * 4.8 * fallbackScale);
+                    } else {
+                        desiredCamPos.set(0, (2.25 + speedNorm * 0.35) * fallbackScale, (4.35 + speedNorm * 1.15) * fallbackScale);
+                    }
+                    camera.position.lerp(desiredCamPos, Math.min(1.0, dt * 3.2));
+                    controls.target.lerp(fsdLookAtBase, Math.min(1.0, dt * 5.0));
+                }
+                controls.update();
+                if (camera.position.y < 0.35) camera.position.y = 0.35;
+                renderer.render(scene, camera);
+            }
+
+            if (now - lastBannerTime > 180) {
+                lastBannerTime = now;
+                updateBanner();
+            }
         }
 
+        syncHudButtons();
+        initGoogleMaps();
         requestAnimationFrame(animate);
     </script>
 </body>
