@@ -1,0 +1,6 @@
+{
+  "name": "AIBOX 桌面",
+  "description": "輕量車機/平板桌面 Launcher，支援 3D 電動車展廳、時鐘編輯、分割組合管理與虛擬導覽列",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
