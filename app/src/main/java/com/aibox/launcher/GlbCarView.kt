@@ -26,10 +26,7 @@ class GlbCarView(context: Context) : FrameLayout(context) {
     private var latestBearingDeg = -1f
     private var latestLat = Double.NaN
     private var latestLng = Double.NaN
-    private var latestDemoDrive = Store.demoDriveOn(context)
-    private var latestRainbow = Store.rainbowRoadOn(context)
     private var latestThemeMode = Store.themeMode(context)
-    private var latestCameraMode = Store.fsdCameraMode(context)
 
     inner class AndroidBridge {
 
@@ -49,15 +46,11 @@ class GlbCarView(context: Context) : FrameLayout(context) {
         }
 
         @JavascriptInterface
-        fun setDemoDrive(enabled: Boolean) {
-            latestDemoDrive = enabled
-            Store.setDemoDriveOn(context, enabled)
-        }
-
-        @JavascriptInterface
-        fun setRainbowRoad(enabled: Boolean) {
-            latestRainbow = enabled
-            Store.setRainbowRoadOn(context, enabled)
+        fun getLastKnownLocation(): String {
+            val lat = Store.lastGpsLat(context)
+            val lng = Store.lastGpsLng(context)
+            val bearing = Store.lastGpsBearing(context)
+            return if (!lat.isNaN() && !lng.isNaN()) "{\"lat\":$lat,\"lng\":$lng,\"bearing\":$bearing}" else "{}"
         }
 
         @JavascriptInterface
@@ -68,13 +61,6 @@ class GlbCarView(context: Context) : FrameLayout(context) {
             (context as? HomeActivity)?.runOnUiThread {
                 App.applyNightMode(context)
             }
-        }
-
-        @JavascriptInterface
-        fun setCameraMode(mode: Int) {
-            val clamped = mode.coerceIn(0, 2)
-            latestCameraMode = clamped
-            Store.setFsdCameraMode(context, clamped)
         }
     }
 
@@ -150,10 +136,7 @@ class GlbCarView(context: Context) : FrameLayout(context) {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 isPageLoaded = true
-                setDemoDrive(latestDemoDrive)
-                setRainbowRoad(latestRainbow)
                 setThemeMode(latestThemeMode)
-                setCameraMode(latestCameraMode)
                 setGpsData(latestSpeedKmh, latestBearingDeg, latestLat, latestLng)
             }
         }
@@ -163,8 +146,8 @@ class GlbCarView(context: Context) : FrameLayout(context) {
             javaScriptEnabled = true
             domStorageEnabled = true
             setGeolocationEnabled(true)
-            setSupportZoom(false)
-            builtInZoomControls = false
+            setSupportZoom(true)
+            builtInZoomControls = true
             displayZoomControls = false
             allowFileAccess = true
             allowContentAccess = true
@@ -178,18 +161,13 @@ class GlbCarView(context: Context) : FrameLayout(context) {
 
         val customGlb = File(context.filesDir, "custom_car.glb")
         val modelParam = if (customGlb.exists()) "custom_car.glb" else "carnew.glb"
+        val savedLat = Store.lastGpsLat(context)
+        val savedLng = Store.lastGpsLng(context)
+        val latParam = if (!savedLat.isNaN() && !savedLng.isNaN()) "&lat=$savedLat&lng=$savedLng" else ""
         webView.loadUrl(
             "https://appassets.androidplatform.net/assets/car_viewer.html" +
-                "?model=$modelParam&rainbow=$latestRainbow&theme=$latestThemeMode&cam=$latestCameraMode&demo=$latestDemoDrive"
+                "?model=$modelParam&theme=$latestThemeMode$latParam"
         )
-    }
-
-    fun setDemoDrive(enabled: Boolean) {
-        latestDemoDrive = enabled
-        if (!isPageLoaded) return
-        webView.post {
-            webView.evaluateJavascript("if(window.setDemoDrive)setDemoDrive($enabled)", null)
-        }
     }
 
     fun setGpsData(
@@ -217,22 +195,6 @@ class GlbCarView(context: Context) : FrameLayout(context) {
         if (!isPageLoaded) return
         webView.post {
             webView.evaluateJavascript("if(window.setThemeMode)setThemeMode($latestThemeMode)", null)
-        }
-    }
-
-    fun setCameraMode(mode: Int) {
-        latestCameraMode = mode.coerceIn(0, 2)
-        if (!isPageLoaded) return
-        webView.post {
-            webView.evaluateJavascript("if(window.setCameraMode)setCameraMode($latestCameraMode)", null)
-        }
-    }
-
-    fun setRainbowRoad(enabled: Boolean) {
-        latestRainbow = enabled
-        if (!isPageLoaded) return
-        webView.post {
-            webView.evaluateJavascript("if(window.setRainbowRoad)setRainbowRoad($enabled)", null)
         }
     }
 

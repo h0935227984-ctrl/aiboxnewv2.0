@@ -70,9 +70,26 @@ object Store {
     fun themeMode(c: Context) = sp(c).getInt("themeMode", 0)
     fun setThemeMode(c: Context, mode: Int) = sp(c).edit().putInt("themeMode", mode.coerceIn(0, 2)).apply()
 
-    /** 3D 攝影機視角: 0=跟隨, 1=俯視, 2=展廳 */
-    fun fsdCameraMode(c: Context) = sp(c).getInt("fsdCam", 0)
-    fun setFsdCameraMode(c: Context, mode: Int) = sp(c).edit().putInt("fsdCam", mode.coerceIn(0, 2)).apply()
+    /** 記憶最後已知 GPS 定位座標與航向，下次開機直接呈現用戶真實位置 */
+    fun lastGpsLat(c: Context): Double {
+        val s = sp(c).getString("last_gps_lat", null) ?: return Double.NaN
+        return s.toDoubleOrNull() ?: Double.NaN
+    }
+    fun lastGpsLng(c: Context): Double {
+        val s = sp(c).getString("last_gps_lng", null) ?: return Double.NaN
+        return s.toDoubleOrNull() ?: Double.NaN
+    }
+    fun lastGpsBearing(c: Context): Float = sp(c).getFloat("last_gps_bearing", 0f)
+
+    fun saveLastGpsLocation(c: Context, lat: Double, lng: Double, bearing: Float) {
+        if (!lat.isNaN() && !lng.isNaN()) {
+            sp(c).edit()
+                .putString("last_gps_lat", lat.toString())
+                .putString("last_gps_lng", lng.toString())
+                .putFloat("last_gps_bearing", bearing)
+                .apply()
+        }
+    }
 
     /** 開機自動背景續播 Spotify / 音樂 */
     fun autoResumeSpotifyOn(c: Context) = sp(c).getBoolean("autoResumeSpotify", true)

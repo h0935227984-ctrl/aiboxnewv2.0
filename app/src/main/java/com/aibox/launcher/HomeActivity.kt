@@ -241,8 +241,6 @@ class HomeActivity : BaseActivity() {
         buildCombos()
         applyWallpaper()
         updateCar3DView()
-        (findViewById<ViewGroup>(R.id.carContainer)?.getChildAt(0) as? GlbCarView)
-            ?.setRainbowRoad(Store.rainbowRoadOn(this))
         startGpsSpeedMonitor()
         h.post(tick)
     }
@@ -275,6 +273,7 @@ class HomeActivity : BaseActivity() {
             else -> -1f
         }
         lastGpsLocation = loc
+        Store.saveLastGpsLocation(this, loc.latitude, loc.longitude, if (bearing >= 0) bearing else 0f)
 
         val glbView = findViewById<ViewGroup>(R.id.carContainer)?.getChildAt(0) as? GlbCarView
         glbView?.setGpsData(kmh, bearing, loc.latitude, loc.longitude)
@@ -294,6 +293,13 @@ class HomeActivity : BaseActivity() {
                 ?: lm.getLastKnownLocation(android.location.LocationManager.PASSIVE_PROVIDER)
             if (cachedLoc != null) {
                 handleGpsLocation(cachedLoc, isCachedOnly = true)
+            } else {
+                val savedLat = Store.lastGpsLat(this)
+                val savedLng = Store.lastGpsLng(this)
+                if (!savedLat.isNaN() && !savedLng.isNaN()) {
+                    val glbView = findViewById<ViewGroup>(R.id.carContainer)?.getChildAt(0) as? GlbCarView
+                    glbView?.setGpsData(0f, Store.lastGpsBearing(this), savedLat, savedLng)
+                }
             }
 
             locListener = android.location.LocationListener { loc ->
@@ -454,10 +460,7 @@ class HomeActivity : BaseActivity() {
     private fun showSystemSettingsDialog() {
         val v = layoutInflater.inflate(R.layout.dialog_system, null)
         val swCar3D = v.findViewById<SwitchCompat>(R.id.swCar3D)
-        val swDemoDrive = v.findViewById<SwitchCompat>(R.id.swDemoDrive)
-        val swRainbowRoad = v.findViewById<SwitchCompat>(R.id.swRainbowRoad)
         val rgThemeMode = v.findViewById<android.widget.RadioGroup>(R.id.rgThemeMode)
-        val rgCameraMode = v.findViewById<android.widget.RadioGroup>(R.id.rgCameraMode)
         val swNavBar = v.findViewById<SwitchCompat>(R.id.swNavBar)
         val swAutoResumeSpotify = v.findViewById<SwitchCompat>(R.id.swAutoResumeSpotify)
         val swAutoUsbReconnect = v.findViewById<SwitchCompat>(R.id.swAutoUsbReconnect)
@@ -487,20 +490,6 @@ class HomeActivity : BaseActivity() {
             }
         }
 
-        swDemoDrive.isChecked = Store.demoDriveOn(this)
-        swDemoDrive.setOnCheckedChangeListener { _, on ->
-            Store.setDemoDriveOn(this, on)
-            (findViewById<ViewGroup>(R.id.carContainer)?.getChildAt(0) as? GlbCarView)?.setDemoDrive(on)
-            Toast.makeText(this, if (on) "已開啟模擬試駕預覽" else "已關閉模擬試駕預覽", Toast.LENGTH_SHORT).show()
-        }
-
-        swRainbowRoad.isChecked = Store.rainbowRoadOn(this)
-        swRainbowRoad.setOnCheckedChangeListener { _, on ->
-            Store.setRainbowRoadOn(this, on)
-            (findViewById<ViewGroup>(R.id.carContainer)?.getChildAt(0) as? GlbCarView)?.setRainbowRoad(on)
-            Toast.makeText(this, if (on) "已啟用彩虹大道模式" else "已關閉彩虹大道模式", Toast.LENGTH_SHORT).show()
-        }
-
         when (Store.themeMode(this)) {
             1 -> rgThemeMode.check(R.id.rbThemeDay)
             2 -> rgThemeMode.check(R.id.rbThemeNight)
@@ -515,21 +504,6 @@ class HomeActivity : BaseActivity() {
             Store.setThemeMode(this, mode)
             App.applyNightMode(this)
             (findViewById<ViewGroup>(R.id.carContainer)?.getChildAt(0) as? GlbCarView)?.setThemeMode(mode)
-        }
-
-        when (Store.fsdCameraMode(this)) {
-            1 -> rgCameraMode.check(R.id.rbCamTop)
-            2 -> rgCameraMode.check(R.id.rbCamShowroom)
-            else -> rgCameraMode.check(R.id.rbCamFollow)
-        }
-        rgCameraMode.setOnCheckedChangeListener { _, checkedId ->
-            val mode = when (checkedId) {
-                R.id.rbCamTop -> 1
-                R.id.rbCamShowroom -> 2
-                else -> 0
-            }
-            Store.setFsdCameraMode(this, mode)
-            (findViewById<ViewGroup>(R.id.carContainer)?.getChildAt(0) as? GlbCarView)?.setCameraMode(mode)
         }
 
         swNavBar.isChecked = Store.navBarOn(this)

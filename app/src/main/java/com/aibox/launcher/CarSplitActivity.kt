@@ -74,10 +74,7 @@ class CarSplitActivity : BaseActivity() {
     override fun onResume() {
         super.onResume()
         carView?.apply {
-            setRainbowRoad(Store.rainbowRoadOn(this@CarSplitActivity))
-            setDemoDrive(Store.demoDriveOn(this@CarSplitActivity))
             setThemeMode(Store.themeMode(this@CarSplitActivity))
-            setCameraMode(Store.fsdCameraMode(this@CarSplitActivity))
         }
     }
 

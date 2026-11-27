@@ -13,22 +13,6 @@
         android:textSize="16sp"
         android:paddingBottom="12dp"/>
 
-    <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/swDemoDrive"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="開啟模擬試駕預覽 (自動巡航)"
-        android:textSize="16sp"
-        android:paddingBottom="12dp"/>
-
-    <androidx.appcompat.widget.SwitchCompat
-        android:id="@+id/swRainbowRoad"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="啟用彩虹大道模式 (炫彩光帶)"
-        android:textSize="16sp"
-        android:paddingBottom="12dp"/>
-
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -60,39 +44,6 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="夜間"/>
-    </RadioGroup>
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="鏡頭視角模式"
-        android:textSize="14sp"
-        android:paddingBottom="4dp"/>
-
-    <RadioGroup
-        android:id="@+id/rgCameraMode"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingBottom="16dp">
-        <RadioButton
-            android:id="@+id/rbCamFollow"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="跟隨"/>
-        <RadioButton
-            android:id="@+id/rbCamTop"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="俯視"/>
-        <RadioButton
-            android:id="@+id/rbCamShowroom"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="展廳 360°"/>
     </RadioGroup>
 
     <androidx.appcompat.widget.SwitchCompat
