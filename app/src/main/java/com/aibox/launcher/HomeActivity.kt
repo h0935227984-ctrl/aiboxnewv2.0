@@ -58,6 +58,8 @@ class HomeActivity : BaseActivity() {
     @Volatile private var smallKey: String? = null
     @Volatile private var small: Bitmap? = null
     private val blurExec = Executors.newSingleThreadExecutor()
+    private var activeWallpaperSwitch: SwitchCompat? = null
+    private var suppressWallpaperSwitchListener = false
 
     private val tick = object : Runnable {
         override fun run() { updateClock(); h.postDelayed(this, 5000) }
@@ -67,8 +69,19 @@ class HomeActivity : BaseActivity() {
         if (uris.isNotEmpty()) {
             Toast.makeText(this, "處理多張桌布中…", Toast.LENGTH_SHORT).show()
             Wallpaper.importUris(this, uris) { ok ->
-                Toast.makeText(this, if (ok) "桌布群組已更新" else "桌布讀取失敗", Toast.LENGTH_SHORT).show()
-                if (ok) applyWallpaper()
+                Toast.makeText(
+                    this,
+                    if (ok) "桌布群組已更新，3D 車輛模型已自動關閉" else "桌布讀取失敗",
+                    Toast.LENGTH_SHORT
+                ).show()
+                if (ok) {
+                    Store.setWallpaperOn(this, true)
+                    Store.setCar3DOn(this, false)
+                    syncWallpaperSwitchQuietly(true)
+                    applyWallpaper()
+                    updateCar3DView()
+                    buildCombos()
+                }
             }
         }
     }
@@ -129,6 +142,7 @@ class HomeActivity : BaseActivity() {
         btnMore.setOnClickListener { showSettings() }
         scrollView.setOnLongClickListener { showSettings(); true }          // 長按空白處也能開設定
 
+        enforceModeMutualExclusion()
         applyCar3DPosition()
         updateCar3DView()
         MediaResumeHelper.resumeOnBootIfNeeded(this)
@@ -159,21 +173,62 @@ class HomeActivity : BaseActivity() {
         }
     }
 
-    private fun updateCar3DView(forceReload: Boolean = false) {
-        val carContainer = findViewById<ViewGroup>(R.id.carContainer) ?: return
-        val want3D = Store.car3DOn(this)
-        val current = carContainer.getChildAt(0)
-        if (!forceReload) {
-            if (want3D && current is GlbCarView) return
-            if (!want3D && current is Turntable360View) return
+    private fun enforceModeMutualExclusion() {
+        if (Store.wallpaperActive(this) && Store.car3DOn(this)) {
+            Store.setCar3DOn(this, false)
+        }
+    }
+
+    private fun syncWallpaperSwitchQuietly(checked: Boolean) {
+        val sw = activeWallpaperSwitch ?: return
+        suppressWallpaperSwitchListener = true
+        sw.isChecked = checked
+        suppressWallpaperSwitchListener = false
+    }
+
+    private fun clearCarContainer(carContainer: ViewGroup) {
+        for (i in 0 until carContainer.childCount) {
+            val child = carContainer.getChildAt(i)
+            if (child is GlbCarView) {
+                try {
+                    child.webView.stopLoading()
+                    child.webView.loadUrl("about:blank")
+                    child.webView.onPause()
+                    child.webView.destroy()
+                } catch (_: Throwable) {}
+            }
         }
         carContainer.removeAllViews()
-        carContainer.visibility = View.VISIBLE
-        if (want3D) {
-            carContainer.addView(GlbCarView(this), ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        } else {
-            carContainer.addView(Turntable360View(this), ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+
+    private fun updateCar3DView(forceReload: Boolean = false) {
+        val carWrapper = findViewById<View>(R.id.carWrapper)
+        val carContainer = findViewById<ViewGroup>(R.id.carContainer) ?: return
+        val carFeatherTop = findViewById<View>(R.id.carFeatherTop)
+        val carFeatherBottom = findViewById<View>(R.id.carFeatherBottom)
+
+        val show3D = Store.car3DOn(this) && !Store.wallpaperActive(this)
+        if (!show3D) {
+            clearCarContainer(carContainer)
+            carContainer.visibility = View.GONE
+            carFeatherTop?.visibility = View.GONE
+            carFeatherBottom?.visibility = View.GONE
+            carWrapper?.visibility = View.INVISIBLE
+            return
         }
+
+        carWrapper?.visibility = View.VISIBLE
+        carContainer.visibility = View.VISIBLE
+        carFeatherTop?.visibility = View.VISIBLE
+        carFeatherBottom?.visibility = View.VISIBLE
+
+        val current = carContainer.getChildAt(0)
+        if (!forceReload && current is GlbCarView) return
+        clearCarContainer(carContainer)
+        carContainer.addView(
+            GlbCarView(this),
+            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
     }
 
     override fun onResume() {
@@ -181,6 +236,7 @@ class HomeActivity : BaseActivity() {
         applyScrollPadding()
         NavState.listener = { v -> animateReserve(v, true) }
         animateReserve(NavState.visible && Store.navBarOn(this), false)
+        enforceModeMutualExclusion()
         applyCar3DPosition()
         buildCombos()
         applyWallpaper()
@@ -285,6 +341,7 @@ class HomeActivity : BaseActivity() {
 
     private fun showWallpaperSettingsDialog() {
         val v = layoutInflater.inflate(R.layout.dialog_effects, null)
+        val swWallpaperOn = v.findViewById<SwitchCompat>(R.id.swWallpaperOn)
         val swBlur = v.findViewById<SwitchCompat>(R.id.swBlur)
         val sbBlur = v.findViewById<SeekBar>(R.id.sbBlur)
         val swDim = v.findViewById<SwitchCompat>(R.id.swDim)
@@ -293,6 +350,32 @@ class HomeActivity : BaseActivity() {
         val btnPickWallpaper = v.findViewById<View>(R.id.btnPickWallpaper)
         val btnResetWallpaper = v.findViewById<View>(R.id.btnResetWallpaper)
         val note = v.findViewById<View>(R.id.note)
+
+        activeWallpaperSwitch = swWallpaperOn
+        syncWallpaperSwitchQuietly(Store.wallpaperActive(this))
+        swWallpaperOn.setOnCheckedChangeListener { _, on ->
+            if (suppressWallpaperSwitchListener) return@setOnCheckedChangeListener
+            if (on) {
+                if (Wallpaper.file(this) == null) {
+                    syncWallpaperSwitchQuietly(false)
+                    Toast.makeText(this, "請先選擇桌布照片或影片", Toast.LENGTH_SHORT).show()
+                    return@setOnCheckedChangeListener
+                }
+                Store.setWallpaperOn(this, true)
+                Store.setCar3DOn(this, false)
+                applyWallpaper()
+                updateCar3DView()
+                buildCombos()
+                Toast.makeText(this, "已啟用桌布，3D 車輛模型已自動關閉", Toast.LENGTH_SHORT).show()
+            } else {
+                Store.setWallpaperOn(this, false)
+                Store.setCar3DOn(this, true)
+                applyWallpaper()
+                updateCar3DView()
+                buildCombos()
+                Toast.makeText(this, "已關閉桌布並開啟 3D 車輛模型", Toast.LENGTH_SHORT).show()
+            }
+        }
 
         swBlur.isChecked = Store.blurOn(this); sbBlur.progress = Store.blurStrength(this)
         sbBlur.isEnabled = swBlur.isChecked
@@ -333,8 +416,13 @@ class HomeActivity : BaseActivity() {
                 multiPicker.launch(arrayOf("image/*", "video/mp4"))
             } catch (e: Exception) {
                 if (Wallpaper.importFolderFromAppFolder(this)) {
+                    Store.setWallpaperOn(this, true)
+                    Store.setCar3DOn(this, false)
+                    syncWallpaperSwitchQuietly(true)
                     applyWallpaper()
-                    Toast.makeText(this, "已從資料夾匯入全部桌布", Toast.LENGTH_SHORT).show()
+                    updateCar3DView()
+                    buildCombos()
+                    Toast.makeText(this, "已從資料夾匯入全部桌布，3D 車輛模型已自動關閉", Toast.LENGTH_SHORT).show()
                 } else {
                     Toast.makeText(this, "無法開啟檔案選擇器，請將桌布放入 App 專屬資料夾", Toast.LENGTH_LONG).show()
                 }
@@ -342,8 +430,13 @@ class HomeActivity : BaseActivity() {
         }
         btnResetWallpaper.setOnClickListener {
             Wallpaper.clear(this)
+            Store.setWallpaperOn(this, false)
+            Store.setCar3DOn(this, true)
+            syncWallpaperSwitchQuietly(false)
             applyWallpaper()
-            Toast.makeText(this, "已還原預設桌布", Toast.LENGTH_SHORT).show()
+            updateCar3DView()
+            buildCombos()
+            Toast.makeText(this, "已還原預設並開啟 3D 車輛模型", Toast.LENGTH_SHORT).show()
         }
 
         val d = AlertDialog.Builder(this)
@@ -351,6 +444,9 @@ class HomeActivity : BaseActivity() {
             .setView(v)
             .setPositiveButton("完成", null)
             .create()
+        d.setOnDismissListener {
+            if (activeWallpaperSwitch === swWallpaperOn) activeWallpaperSwitch = null
+        }
         d.window?.setGravity(Gravity.BOTTOM)
         d.show()
     }
@@ -370,9 +466,25 @@ class HomeActivity : BaseActivity() {
 
         swCar3D.isChecked = Store.car3DOn(this)
         swCar3D.setOnCheckedChangeListener { _, on ->
-            Store.setCar3DOn(this, on)
-            updateCar3DView()
-            Toast.makeText(this, if (on) "已開啟 3D 車輛桌面展廳" else "已切換至預設 360 轉盤", Toast.LENGTH_SHORT).show()
+            if (on) {
+                Store.setCar3DOn(this, true)
+                Store.setWallpaperOn(this, false)
+                applyWallpaper()
+                updateCar3DView()
+                buildCombos()
+                Toast.makeText(this, "已開啟 3D 車輛桌面展廳，桌布已自動關閉", Toast.LENGTH_SHORT).show()
+            } else {
+                Store.setCar3DOn(this, false)
+                if (Wallpaper.file(this) != null) {
+                    Store.setWallpaperOn(this, true)
+                    Toast.makeText(this, "已關閉 3D 車輛模型並自動切換回桌布", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(this, "已關閉 3D 車輛模型", Toast.LENGTH_SHORT).show()
+                }
+                applyWallpaper()
+                updateCar3DView()
+                buildCombos()
+            }
         }
 
         swDemoDrive.isChecked = Store.demoDriveOn(this)
@@ -500,8 +612,15 @@ class HomeActivity : BaseActivity() {
     // ---------------- 桌布 ----------------
 
     private fun applyWallpaper() {
-        val f = Wallpaper.file(this)
-        val custom = f != null
+        val custom = Store.wallpaperActive(this)
+        val f = if (custom) Wallpaper.file(this) else null
+
+        // 使用桌布時移除上下方柔霧邊框線條與 Dock 漸層條，保持桌布完整美觀
+        findViewById<View>(R.id.topFeather)?.visibility = if (custom) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.combosSection)?.let { sec ->
+            if (custom) sec.background = null
+            else sec.setBackgroundResource(R.drawable.bg_feather_dock)
+        }
 
         // 調暗(使用者可開關、可調強度,最高 85%)
         scrim.visibility = if (custom && Store.dimOn(this)) View.VISIBLE else View.GONE
@@ -519,7 +638,11 @@ class HomeActivity : BaseActivity() {
         setLightBars(!custom && !isNight())
 
         if (f == null) {
-            bgImage.setImageDrawable(null); bgVideo.visibility = View.GONE; loadedKey = null
+            video.release()
+            bgImage.setImageDrawable(null)
+            bgVideo.visibility = View.GONE
+            scrim.visibility = View.GONE
+            loadedKey = null
             return
         }
         val isVideo = f.name.endsWith(".mp4", ignoreCase = true)
@@ -529,6 +652,7 @@ class HomeActivity : BaseActivity() {
             applyVideoBlur()
             video.play(f.path)
         } else {
+            video.release()
             bgVideo.visibility = View.GONE
             showImage(f.path)
         }
@@ -566,6 +690,6 @@ class HomeActivity : BaseActivity() {
     }
 
     private fun buildCombos() {
-        Folders.fill(this, box, Store.combos(this), false, Wallpaper.file(this) != null) {}
+        Folders.fill(this, box, Store.combos(this), false, Store.wallpaperActive(this)) {}
     }
 }

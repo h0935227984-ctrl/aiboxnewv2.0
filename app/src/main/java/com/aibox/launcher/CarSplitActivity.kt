@@ -27,25 +27,15 @@ class CarSplitActivity : BaseActivity() {
             setBackgroundColor(getColor(R.color.bg))
         }
 
-        if (Store.car3DOn(this)) {
-            val view = GlbCarView(this)
-            carView = view
-            root.addView(
-                view,
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
+        val view = GlbCarView(this)
+        carView = view
+        root.addView(
+            view,
+            FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
-        } else {
-            root.addView(
-                Turntable360View(this),
-                FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            )
-        }
+        )
 
         val u = Ui.unit(this)
         val btnClose = TextView(this).apply {

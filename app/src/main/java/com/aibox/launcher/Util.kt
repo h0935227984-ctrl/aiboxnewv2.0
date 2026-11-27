@@ -119,6 +119,16 @@ object Store {
     fun wallpaperIsVideo(c: Context) = sp(c).getBoolean("wpv", false)
     fun setWallpaper(c: Context, path: String?, video: Boolean) =
         sp(c).edit().putString("wp", path).putBoolean("wpv", video).apply()
+
+    fun wallpaperOn(c: Context): Boolean = sp(c).getBoolean("wp_on", false)
+    fun setWallpaperOn(c: Context, v: Boolean) = sp(c).edit().putBoolean("wp_on", v).apply()
+
+    /** 是否正在使用自訂桌布（有桌布檔案且未切換為 3D 模型模式） */
+    fun wallpaperActive(c: Context): Boolean {
+        if (Wallpaper.file(c) == null) return false
+        val pref = sp(c)
+        return if (pref.contains("wp_on")) pref.getBoolean("wp_on", true) else true
+    }
 }
 
 object Apps {
@@ -166,7 +176,15 @@ object Apps {
         }
     }
 
-    fun open(c: Context, pkg: String) {
+    fun open(ctx: Context, pkg: String) {
+        val c = ctx.applicationContext
+        val navActive = NavState.visible || (Store.navBarOn(c) && NavService.inst != null)
+        if (navActive) {
+            try {
+                openBounds(c, pkg, Split.safeUsableRect(c))
+                return
+            } catch (_: Throwable) { /* 系統不允許自由視窗時，退回一般開啟 */ }
+        }
         val i = launchIntentFor(c, pkg) ?: return
         c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
@@ -210,7 +228,7 @@ object Split {
     }
 
     /** 計算扣除系統狀態列、系統導覽列與 AIBOX 虛擬導覽列後的安全可用區域 */
-    private fun safeUsableRect(c: Context): Rect {
+    fun safeUsableRect(c: Context): Rect {
         val wm = c.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val density = c.resources.displayMetrics.density
         val navGap = (4f * density).toInt().coerceAtLeast(2)

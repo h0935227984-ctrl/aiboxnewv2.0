@@ -5,6 +5,17 @@
 
     <LinearLayout
         android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginBottom="14dp"
+        android:gravity="center_vertical" android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:text="使用桌布（開啟時自動關閉 3D 模型）" android:textSize="16sp" />
+        <androidx.appcompat.widget.SwitchCompat android:id="@+id/swWallpaperOn"
+            android:layout_width="wrap_content" android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent" android:layout_height="wrap_content"
         android:gravity="center_vertical" android:orientation="horizontal">
         <TextView
             android:layout_width="0dp" android:layout_height="wrap_content"

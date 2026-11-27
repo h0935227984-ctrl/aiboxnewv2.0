@@ -16,6 +16,7 @@
 
     <!-- 頂部柔霧漸層過渡，讓時鐘與設定區無邊界融入桌面 -->
     <View
+        android:id="@+id/topFeather"
         android:layout_width="match_parent"
         android:layout_height="150dp"
         android:layout_gravity="top"
@@ -56,6 +57,7 @@
                     android:layout_height="match_parent" />
 
                 <View
+                    android:id="@+id/carFeatherTop"
                     android:layout_width="match_parent"
                     android:layout_height="52dp"
                     android:layout_gravity="top"
@@ -64,6 +66,7 @@
                     android:focusable="false" />
 
                 <View
+                    android:id="@+id/carFeatherBottom"
                     android:layout_width="match_parent"
                     android:layout_height="64dp"
                     android:layout_gravity="bottom"
