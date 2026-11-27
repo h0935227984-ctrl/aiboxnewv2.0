@@ -315,6 +315,179 @@
     return false;
   }
 
+  /**
+   * 計算動態煞車燈狀態與車身俯仰慣性 (無須 OBD/CAN，依據 GPS 速度變化量或靜止判斷)
+   */
+  function computeBrakeState(currentSpeedKmh, prevSpeedKmh, dtSec) {
+    const dt = Math.max(0.001, Number(dtSec) || 0.016);
+    const curSpeed = Math.max(0, Number(currentSpeedKmh) || 0);
+    const prevSpeed = Math.max(0, Number(prevSpeedKmh) || 0);
+    const accel = (curSpeed - prevSpeed) / dt; // km/h/s
+
+    // 減速門檻：減速度小於 -3.2 km/h/s (強烈或中度踩煞車) 或 車速低於 1.0 km/h (停等怠速踩著煞車)
+    const isDeceleratingHard = accel < -3.2 && curSpeed > 1.5;
+    const isStationaryBraking = curSpeed < 1.0;
+    const isBraking = isDeceleratingHard || isStationaryBraking;
+
+    let brakeIntensity = 0.0;
+    if (isStationaryBraking) {
+      brakeIntensity = 1.0;
+    } else if (isDeceleratingHard) {
+      brakeIntensity = Math.min(1.0, Math.max(0.4, (-accel - 3.2) / 8.8 * 0.6 + 0.4));
+    } else if (accel < -1.2 && curSpeed > 3.0) {
+      brakeIntensity = 0.15;
+    }
+
+    // 車身動態俯仰 (前傾點頭 / 後仰抬頭)
+    const pitchRad = Math.max(-0.065, Math.min(0.045, -accel * 0.0022));
+
+    return {
+      accelKmhPerSec: accel,
+      isBraking,
+      brakeIntensity,
+      pitchRad
+    };
+  }
+
+  /**
+   * 停等紅燈 15 秒電影級展廳環視控制器 (Anti-Occlusion Showroom Controller)
+   * 1. 靜止持續超過 15 秒自動啟動 360° 緩慢環視
+   * 2. 防 3D 建築遮擋算法 (Anti-Occlusion)：
+   *    - 俯仰角從平視 67.5° 抬高至 38.5° 高空路峽視角（垂直俯瞰），視線由天空切向路面，避免橫向旋轉切入沿街建築物
+   *    - 縮放微調收攏 (19.1 -> 19.45)，將視距收斂於道路紅線內
+   *    - 相機錨點由前瞻偏移平滑回歸車輛實際坐標中心
+   * 3. 起步無縫銜接動畫 (Seamless Departure Transition)：
+   *    - 當車速 > 1.8 km/h 或手動觸碰時，觸發 1.25 秒 cubic ease-out 平滑過渡
+   *    - 鏡頭沿最短角度平滑歸正 (0° 正向)，俯仰回歸 67.5°，縮放回歸 19.1
+   */
+  function createShowroomController(options) {
+    const opts = options || {};
+    const stopThresholdSec = Number.isFinite(opts.stopThresholdSec) ? opts.stopThresholdSec : 15.0;
+    const orbitSpeedDegPerSec = Number.isFinite(opts.orbitSpeedDegPerSec) ? opts.orbitSpeedDegPerSec : 12.0;
+    const showroomTiltDeg = Number.isFinite(opts.showroomTiltDeg) ? opts.showroomTiltDeg : 38.5;
+    const showroomZoom = Number.isFinite(opts.showroomZoom) ? opts.showroomZoom : 19.45;
+    const departureDurationSec = Number.isFinite(opts.departureDurationSec) ? opts.departureDurationSec : 1.25;
+
+    let stopDurationSec = 0.0;
+    let isActive = false;
+    let isDeparting = false;
+    let entryProgress = 0.0;
+    let currentOrbitAngleDeg = 0.0;
+
+    let departStartAngleDeg = 0.0;
+    let departStartTiltDeg = 38.5;
+    let departStartZoom = 19.45;
+    let departElapsedSec = 0.0;
+
+    function update(dtSec, speedKmh, isUserTouching, baseTiltDeg, baseZoom) {
+      const dt = Math.max(0.0001, Number(dtSec) || 0.016);
+      const speed = Math.max(0, Number(speedKmh) || 0);
+      const bTilt = Number.isFinite(baseTiltDeg) ? baseTiltDeg : 67.5;
+      const bZoom = Number.isFinite(baseZoom) ? baseZoom : 19.1;
+
+      // 判斷車輛是否真正靜止
+      if (speed <= 0.8 && !isUserTouching) {
+        stopDurationSec += dt;
+      } else if (speed > 1.2) {
+        stopDurationSec = 0.0;
+      }
+
+      // 觸發條件：靜止持續超過 15 秒且無手動觸摸
+      if (!isActive && !isDeparting && stopDurationSec >= stopThresholdSec && !isUserTouching) {
+        isActive = true;
+        entryProgress = 0.0;
+        currentOrbitAngleDeg = 0.0;
+      }
+
+      // 離開條件：踩油門起步 (速度 > 1.8 km/h) 或 手動觸碰畫面
+      if (isActive && (speed >= 1.8 || isUserTouching)) {
+        isActive = false;
+        isDeparting = true;
+        departStartAngleDeg = currentOrbitAngleDeg;
+        const easeIn = 1 - Math.pow(1 - entryProgress, 3);
+        departStartTiltDeg = bTilt + (showroomTiltDeg - bTilt) * easeIn;
+        departStartZoom = bZoom + (showroomZoom - bZoom) * easeIn;
+        departElapsedSec = 0.0;
+      }
+
+      // 狀態 1：展廳 360° 環視中 (高空防遮擋俯角 + 車輛居中)
+      if (isActive) {
+        entryProgress = Math.min(1.0, entryProgress + dt / 1.6);
+        const easeEntry = 1 - Math.pow(1 - entryProgress, 3);
+        currentOrbitAngleDeg = (currentOrbitAngleDeg + orbitSpeedDegPerSec * dt) % 360;
+
+        const tilt = bTilt + (showroomTiltDeg - bTilt) * easeEntry;
+        const zoom = bZoom + (showroomZoom - bZoom) * easeEntry;
+
+        return {
+          isActive: true,
+          isDeparting: false,
+          stopDurationSec,
+          headingOffsetDeg: currentOrbitAngleDeg,
+          tiltDeg: tilt,
+          zoom: zoom,
+          centerVehicleWeight: easeEntry,
+          statusText: '✨ 360° 尊爵展廳環視 (停等 15s)'
+        };
+      }
+
+      // 狀態 2：起步無縫歸位過渡動畫 (Seamless Departure Transition)
+      if (isDeparting) {
+        departElapsedSec += dt;
+        const t = Math.min(1.0, departElapsedSec / departureDurationSec);
+        const easeOut = 1 - Math.pow(1 - t, 3);
+
+        const angleDiff = normalizeAngleDiffDeg(0, departStartAngleDeg);
+        const headingOffset = (departStartAngleDeg + angleDiff * easeOut + 360) % 360;
+        const tilt = departStartTiltDeg + (bTilt - departStartTiltDeg) * easeOut;
+        const zoom = departStartZoom + (bZoom - departStartZoom) * easeOut;
+        const centerWeight = 1.0 - easeOut;
+
+        if (t >= 1.0) {
+          isDeparting = false;
+          currentOrbitAngleDeg = 0.0;
+        }
+
+        return {
+          isActive: false,
+          isDeparting: true,
+          stopDurationSec,
+          headingOffsetDeg: headingOffset,
+          tiltDeg: tilt,
+          zoom: zoom,
+          centerVehicleWeight: centerWeight,
+          statusText: '⚡ 起步加速 · 鏡頭無縫歸位中'
+        };
+      }
+
+      // 狀態 3：正常行駛
+      return {
+        isActive: false,
+        isDeparting: false,
+        stopDurationSec,
+        headingOffsetDeg: null,
+        tiltDeg: bTilt,
+        zoom: bZoom,
+        centerVehicleWeight: 0.0,
+        statusText: null
+      };
+    }
+
+    function reset() {
+      stopDurationSec = 0.0;
+      isActive = false;
+      isDeparting = false;
+      entryProgress = 0.0;
+      currentOrbitAngleDeg = 0.0;
+    }
+
+    return {
+      update,
+      reset,
+      isCinematicActive: () => isActive || isDeparting
+    };
+  }
+
   return {
     DEMO_ROUTE,
     totalLoopMeters,
@@ -327,5 +500,7 @@
     shouldKeepFollowingOnDrag,
     computeLookAheadCenter,
     createRoadTracker,
+    computeBrakeState,
+    createShowroomController,
   };
 });

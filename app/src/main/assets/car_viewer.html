@@ -255,6 +255,15 @@
 
         const MapLogic = window.AiboxMapLogic;
         const roadTracker = MapLogic ? MapLogic.createRoadTracker() : null;
+        const showroomController = MapLogic ? MapLogic.createShowroomController({
+            stopThresholdSec: 15.0,
+            orbitSpeedDegPerSec: 12.0,
+            showroomTiltDeg: 38.5,
+            showroomZoom: 19.45,
+            departureDurationSec: 1.25
+        }) : null;
+        let currentShowroomPose = null;
+
         const urlParams = new URLSearchParams(window.location.search);
         const modelUrl = urlParams.get('model') || 'carnew.glb';
         let themeMode = parseInt(urlParams.get('theme') || '0', 10) || 0; // 0=自動, 1=日間, 2=夜間
@@ -364,7 +373,10 @@
         }
 
         function updateBanner() {
-            if (hasLiveGpsFix) {
+            if (currentShowroomPose && currentShowroomPose.statusText) {
+                statusDotEl.className = 'status-dot live';
+                roadTitleEl.textContent = currentShowroomPose.statusText;
+            } else if (hasLiveGpsFix) {
                 statusDotEl.className = 'status-dot live';
                 roadTitleEl.textContent = mapViewEnabled ? 'GPS 道路即時追蹤中' : '3D 車道雷達模式';
             } else {
@@ -387,6 +399,10 @@
             isDragRotating = false;
             lastTouchX = clientX;
             lastTouchY = clientY;
+            if (showroomController && showroomController.isCinematicActive()) {
+                showroomController.reset();
+                currentShowroomPose = null;
+            }
             initialHeadingOffset = userHeadingOffsetDeg;
             initialTilt = manualTiltDeg;
         }
@@ -561,6 +577,160 @@
         let carHeight = 1.1;
         let carWidthUnits = 1.28;
 
+        // ================= 動態車燈系統 (LED 頭燈光束投射 & 煞車尾燈光效) =================
+        const beamCanvas = document.createElement('canvas');
+        beamCanvas.width = 256; beamCanvas.height = 512;
+        const bctx = beamCanvas.getContext('2d');
+        const bgrad = bctx.createRadialGradient(128, 30, 8, 128, 220, 260);
+        bgrad.addColorStop(0.0, 'rgba(235, 245, 255, 0.75)');
+        bgrad.addColorStop(0.35, 'rgba(200, 230, 255, 0.38)');
+        bgrad.addColorStop(0.70, 'rgba(170, 215, 255, 0.12)');
+        bgrad.addColorStop(1.0, 'rgba(140, 200, 255, 0.0)');
+        bctx.fillStyle = bgrad;
+        bctx.beginPath();
+        bctx.moveTo(96, 20);
+        bctx.lineTo(160, 20);
+        bctx.lineTo(248, 505);
+        bctx.lineTo(8, 505);
+        bctx.closePath();
+        bctx.fill();
+        const headlightBeamTexture = new THREE.CanvasTexture(beamCanvas);
+
+        const splashCanvas = document.createElement('canvas');
+        splashCanvas.width = 256; splashCanvas.height = 256;
+        const spctx = splashCanvas.getContext('2d');
+        const spgrad = spctx.createRadialGradient(128, 128, 10, 128, 128, 120);
+        spgrad.addColorStop(0.0, 'rgba(255, 18, 18, 0.85)');
+        spgrad.addColorStop(0.45, 'rgba(255, 10, 10, 0.40)');
+        spgrad.addColorStop(0.80, 'rgba(220, 0, 0, 0.10)');
+        spgrad.addColorStop(1.0, 'rgba(180, 0, 0, 0.0)');
+        spctx.fillStyle = spgrad;
+        spctx.fillRect(0, 0, 256, 256);
+        const brakeSplashTexture = new THREE.CanvasTexture(splashCanvas);
+
+        const headlightLensMat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: 0xdbeafe,
+            emissiveIntensity: 0.0,
+            roughness: 0.1,
+            metalness: 0.1
+        });
+        const headlightBeamMat = new THREE.MeshBasicMaterial({
+            map: headlightBeamTexture,
+            transparent: true,
+            opacity: 0.0,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+        const brakeLensMat = new THREE.MeshStandardMaterial({
+            color: 0xff1111,
+            emissive: 0xff0000,
+            emissiveIntensity: 0.15,
+            roughness: 0.2,
+            metalness: 0.1
+        });
+        const brakeSplashMat = new THREE.MeshBasicMaterial({
+            map: brakeSplashTexture,
+            transparent: true,
+            opacity: 0.0,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        let lightingGroup = null;
+
+        function buildVehicleLighting(alignedBox) {
+            const size = alignedBox.getSize(new THREE.Vector3());
+            const halfW = Math.max(0.38, size.x * 0.38);
+            const halfL = Math.max(0.85, size.z * 0.48);
+            const frontZ = -halfL;
+            const rearZ = halfL;
+            const headY = Math.max(0.25, size.y * 0.38);
+            const tailY = Math.max(0.32, size.y * 0.48);
+            const chmslY = Math.max(0.55, size.y * 0.82);
+
+            lightingGroup = new THREE.Group();
+            lightingGroup.name = 'CarLightingSystem';
+
+            // 前 LED 晝行燈 / 矩陣頭燈 (左 / 右)
+            const hlGeom = new THREE.BoxGeometry(0.18, 0.05, 0.04);
+            const hlLeft = new THREE.Mesh(hlGeom, headlightLensMat);
+            hlLeft.position.set(-halfW, headY, frontZ + 0.03);
+            hlLeft.name = 'CarHeadlightL';
+            lightingGroup.add(hlLeft);
+
+            const hlRight = new THREE.Mesh(hlGeom, headlightLensMat);
+            hlRight.position.set(halfW, headY, frontZ + 0.03);
+            hlRight.name = 'CarHeadlightR';
+            lightingGroup.add(hlRight);
+
+            // 前方地面扇形光束投射 (夜間地面梯形照明)
+            const beamMesh = new THREE.Mesh(new THREE.PlaneGeometry(6.5, 16.0), headlightBeamMat);
+            beamMesh.rotation.x = -Math.PI / 2;
+            beamMesh.position.set(0, 0.016, frontZ - 8.0);
+            beamMesh.name = 'CarHeadlightBeam';
+            lightingGroup.add(beamMesh);
+
+            // 後 LED 尾燈 / 動態煞車燈條 (左 / 右)
+            const brGeom = new THREE.BoxGeometry(0.24, 0.045, 0.04);
+            const brLeft = new THREE.Mesh(brGeom, brakeLensMat);
+            brLeft.position.set(-halfW, tailY, rearZ - 0.02);
+            brLeft.name = 'CarBrakeL';
+            lightingGroup.add(brLeft);
+
+            const brRight = new THREE.Mesh(brGeom, brakeLensMat);
+            brRight.position.set(halfW, tailY, rearZ - 0.02);
+            brRight.name = 'CarBrakeR';
+            lightingGroup.add(brRight);
+
+            // 第三煞車燈 (車頂後擋風玻璃上方高位煞車燈 CHMSL)
+            const chmsl = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.025, 0.03), brakeLensMat);
+            chmsl.position.set(0, chmslY, rearZ * 0.45);
+            chmsl.name = 'CarBrakeCHMSL';
+            lightingGroup.add(chmsl);
+
+            // 後方地面煞車紅光映地 (Brake Splash)
+            const splashMesh = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.0), brakeSplashMat);
+            splashMesh.rotation.x = -Math.PI / 2;
+            splashMesh.position.set(0, 0.018, rearZ + 0.85);
+            splashMesh.name = 'CarBrakeSplash';
+            lightingGroup.add(splashMesh);
+
+            carBodyGroup.add(lightingGroup);
+        }
+
+        function updateCarLighting(dt, isNight, isBraking, brakeIntensity) {
+            // 1. 前大燈與路面投射
+            const targetHeadlightEmissive = isNight ? 3.0 : 0.0;
+            const targetBeamOpacity = isNight ? 0.72 : 0.0;
+            headlightLensMat.emissiveIntensity += (targetHeadlightEmissive - headlightLensMat.emissiveIntensity) * Math.min(1.0, dt * 5.0);
+            headlightBeamMat.opacity += (targetBeamOpacity - headlightBeamMat.opacity) * Math.min(1.0, dt * 5.0);
+
+            // 2. 後尾燈與動態煞車燈
+            let targetBrakeEmissive;
+            let targetSplashOpacity;
+            let brakeColor;
+
+            if (isBraking) {
+                targetBrakeEmissive = 3.2 + brakeIntensity * 1.5;
+                targetSplashOpacity = 0.58 * Math.max(0.4, brakeIntensity);
+                brakeColor = 0xff0f0f;
+            } else if (isNight) {
+                targetBrakeEmissive = 0.85;
+                targetSplashOpacity = 0.08;
+                brakeColor = 0xcc1111;
+            } else {
+                targetBrakeEmissive = 0.05;
+                targetSplashOpacity = 0.0;
+                brakeColor = 0x550000;
+            }
+
+            brakeLensMat.color.setHex(brakeColor);
+            brakeLensMat.emissive.setHex(brakeColor);
+            brakeLensMat.emissiveIntensity += (targetBrakeEmissive - brakeLensMat.emissiveIntensity) * Math.min(1.0, dt * 8.0);
+            brakeSplashMat.opacity += (targetSplashOpacity - brakeSplashMat.opacity) * Math.min(1.0, dt * 8.0);
+        }
+
         // ================= Google Maps Vector + WebGLOverlayView 整合 =================
         let gMap = null;
         let webGLOverlay = null;
@@ -602,6 +772,9 @@
             overlayWheels = [];
             const clone = carModel.clone(true);
             overlayCarBody.add(clone);
+            if (lightingGroup) {
+                overlayCarBody.add(lightingGroup.clone(true));
+            }
             applyOverlayLaneScale();
             clone.traverse((node) => {
                 if (node.name && /wheel|tire|rim|輪/i.test(node.name)) {
@@ -643,6 +816,8 @@
             carWidthUnits = Math.max(0.6, alignedBox.max.x - alignedBox.min.x);
             fsdLookAtBase.set(alignedCenter.x, alignedCenter.y + carHeight * 0.12, alignedCenter.z);
             shadowPlane.visible = true;
+
+            buildVehicleLighting(alignedBox);
 
             document.body.dataset.carSource = sourceName;
             syncCarIntoOverlay();
@@ -895,23 +1070,39 @@
             updateBanner();
         };
 
-        function syncMapCameraNow(includePreset) {
+        function syncMapCameraNow(includePreset, showroomOverride) {
             if (!gMap || !mapViewEnabled) return;
             lastCamUpdateMs = performance.now();
             isApplyingProgrammaticCam = true;
             try {
-                const headingVal = (vehicleHeadingDeg + userHeadingOffsetDeg + 360) % 360;
-                const z = gMap.getZoom() || preferredMapZoom;
-                const centerPos = MapLogic
-                    ? MapLogic.computeLookAheadCenter(vehicleLat, vehicleLng, headingVal, z)
+                const ovr = showroomOverride || null;
+                const headingOffset = (ovr && Number.isFinite(ovr.headingOffsetDeg)) ? ovr.headingOffsetDeg : userHeadingOffsetDeg;
+                const headingVal = (vehicleHeadingDeg + headingOffset + 360) % 360;
+                const curTilt = (ovr && Number.isFinite(ovr.tiltDeg)) ? ovr.tiltDeg : manualTiltDeg;
+                const curZoom = (ovr && Number.isFinite(ovr.zoom)) ? ovr.zoom : (gMap.getZoom() || preferredMapZoom);
+
+                let centerPos;
+                const lookAhead = MapLogic
+                    ? MapLogic.computeLookAheadCenter(vehicleLat, vehicleLng, headingVal, curZoom)
                     : { lat: vehicleLat, lng: vehicleLng };
+
+                if (ovr && Number.isFinite(ovr.centerVehicleWeight) && ovr.centerVehicleWeight > 0.0) {
+                    const w = Math.max(0, Math.min(1, ovr.centerVehicleWeight));
+                    centerPos = {
+                        lat: lookAhead.lat * (1.0 - w) + vehicleLat * w,
+                        lng: lookAhead.lng * (1.0 - w) + vehicleLng * w,
+                    };
+                } else {
+                    centerPos = lookAhead;
+                }
+
                 const camUpdate = {
                     center: centerPos,
                     heading: headingVal,
-                    tilt: manualTiltDeg,
+                    tilt: curTilt,
                 };
-                if (includePreset) {
-                    camUpdate.zoom = preferredMapZoom;
+                if (includePreset || (ovr && Number.isFinite(ovr.zoom))) {
+                    camUpdate.zoom = curZoom;
                 }
                 gMap.moveCamera(camUpdate);
             } finally {
@@ -969,6 +1160,8 @@
         });
         btnRecenter.addEventListener('click', function () {
             // 一鍵重設為基準跟隨視角 (縮放 19.1、正向無偏移、俯仰 67.5°)
+            if (showroomController) showroomController.reset();
+            currentShowroomPose = null;
             userHeadingOffsetDeg = 0.0;
             manualTiltDeg = 67.5;
             preferredMapZoom = 19.1;
@@ -994,11 +1187,13 @@
         function animate(now) {
             requestAnimationFrame(animate);
 
+            const isCinematic = showroomController && showroomController.isCinematicActive();
             const isActive =
                 currentSpeedKmh >= 0.3 ||
                 targetSpeedKmh >= 0.3 ||
                 isUserInteracting ||
                 isTouchingView ||
+                isCinematic ||
                 Math.abs(currentCurvature) > 0.01;
 
             const minInterval = isSoftwareHeadless && !isActive ? 120 : (!isActive ? 45 : 0);
@@ -1032,8 +1227,27 @@
             const headingDiff = MapLogic ? MapLogic.normalizeAngleDiffDeg(targetHeadingDeg, vehicleHeadingDeg) : 0;
             vehicleHeadingDeg = (vehicleHeadingDeg + headingDiff * Math.min(1.0, dt * 5.0) + 360) % 360;
 
-            const accel = (currentSpeedKmh - prevSpeed) / dt;
-            const targetPitch = Math.max(-0.04, Math.min(0.04, -accel * 0.0018));
+            // 1. 動態煞車燈與夜間頭燈投射更新
+            const isNight = isNightActive();
+            const brakeState = MapLogic
+                ? MapLogic.computeBrakeState(currentSpeedKmh, prevSpeed, dt)
+                : { isBraking: currentSpeedKmh < 1.0, brakeIntensity: currentSpeedKmh < 1.0 ? 1.0 : 0.0, pitchRad: 0.0 };
+
+            updateCarLighting(dt, isNight, brakeState.isBraking, brakeState.brakeIntensity);
+
+            // 2. 停等紅燈 15 秒電影級 360° 展廳環視控制器 (防 3D 建築遮擋 + 起步無縫銜接動畫)
+            if (showroomController) {
+                const isTouching = isTouchingView || isUserInteracting;
+                const s = showroomController.update(dt, currentSpeedKmh, isTouching, manualTiltDeg, preferredMapZoom);
+                if (s.isActive || s.isDeparting) {
+                    currentShowroomPose = s;
+                    userHeadingOffsetDeg = s.headingOffsetDeg;
+                } else {
+                    currentShowroomPose = null;
+                }
+            }
+
+            const targetPitch = brakeState.pitchRad;
             const targetRoll = Math.max(-0.04, Math.min(0.04, -currentCurvature * 0.025 * Math.min(1.0, currentSpeedKmh / 40.0)));
 
             carBodyGroup.rotation.x += (targetPitch - carBodyGroup.rotation.x) * Math.min(1.0, dt * 6.0);
@@ -1053,12 +1267,12 @@
             groundUniforms.uPulse.value = (groundUniforms.uPulse.value + (0.28 + speedNorm * 0.45) * dt) % 1.0;
             groundUniforms.uSpeedNorm.value = speedNorm;
 
-            // 地圖相機跟隨與即時更新
-            if (gMap && mapViewEnabled && (currentSpeedKmh >= 0.25 || isTouchingView) && (now - lastCamUpdateMs >= (isSoftwareHeadless ? 100 : 14))) {
-                syncMapCameraNow(false);
+            // 地圖相機跟隨與即時更新 (涵蓋展廳環視與起步歸位過渡)
+            if (gMap && mapViewEnabled && (currentSpeedKmh >= 0.25 || isTouchingView || currentShowroomPose) && (now - lastCamUpdateMs >= (isSoftwareHeadless ? 100 : 14))) {
+                syncMapCameraNow(false, currentShowroomPose);
             }
 
-            if (webGLOverlay && overlayActive && currentSpeedKmh > 0.3) {
+            if (webGLOverlay && overlayActive && (currentSpeedKmh > 0.3 || currentShowroomPose)) {
                 webGLOverlay.requestRedraw();
             }
 
@@ -1066,8 +1280,8 @@
                 if (!isUserInteracting) {
                     const fallbackScale = radarZoomFactor;
                     const rad = (userHeadingOffsetDeg * Math.PI) / 180;
-                    const distH = (4.55 + speedNorm * 1.05) * fallbackScale;
-                    const camY = (1.65 + speedNorm * 0.25) * fallbackScale;
+                    const distH = (currentShowroomPose ? 3.9 : (4.55 + speedNorm * 1.05)) * fallbackScale;
+                    const camY = (currentShowroomPose ? 3.2 : (1.65 + speedNorm * 0.25)) * fallbackScale;
                     desiredCamPos.set(Math.sin(rad) * distH, camY, Math.cos(rad) * distH);
                     const chaseTarget = new THREE.Vector3(fsdLookAtBase.x, fsdLookAtBase.y + 0.35, fsdLookAtBase.z);
                     controls.target.lerp(chaseTarget, Math.min(1.0, dt * 5.0));
