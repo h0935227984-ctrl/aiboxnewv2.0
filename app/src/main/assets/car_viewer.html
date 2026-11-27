@@ -268,8 +268,8 @@
         let lastBearingTimeMs = 0;
         let mapsApiKey = '';
 
-        // 依要求預設視角縮小至 17.0
-        let preferredMapZoom = 17.0;
+        // 依要求預設視角調整成兩次放大後的大小 (19.1)
+        let preferredMapZoom = 19.1;
         let userHeadingOffsetDeg = 0.0;
         let manualTiltDeg = 67.5;
         let followCarCentered = true;
@@ -354,7 +354,7 @@
             btnMapToggle.textContent = mapViewEnabled ? '實景地圖' : '純車道雷達';
             btnTheme.textContent = '主題: ' + (themeNames[themeMode] || '自動');
             
-            const isRecenterNeeded = userHeadingOffsetDeg !== 0.0 || Math.abs(preferredMapZoom - 17.0) > 0.35 || Math.abs(manualTiltDeg - 67.5) > 2.0;
+            const isRecenterNeeded = userHeadingOffsetDeg !== 0.0 || Math.abs(preferredMapZoom - 19.1) > 0.35 || Math.abs(manualTiltDeg - 67.5) > 2.0;
             btnRecenter.classList.toggle('recenter-needed', isRecenterNeeded);
 
             document.body.dataset.mapMode = mapViewEnabled ? 'maps' : 'radar';
@@ -968,10 +968,10 @@
             adjustViewZoom(-0.8);
         });
         btnRecenter.addEventListener('click', function () {
-            // 一鍵重設為基準跟隨視角 (縮放 17.0、正向無偏移、俯仰 67.5°)
+            // 一鍵重設為基準跟隨視角 (縮放 19.1、正向無偏移、俯仰 67.5°)
             userHeadingOffsetDeg = 0.0;
             manualTiltDeg = 67.5;
-            preferredMapZoom = 17.0;
+            preferredMapZoom = 19.1;
             radarZoomFactor = 1.0;
             isUserInteracting = false;
             syncHudButtons();
